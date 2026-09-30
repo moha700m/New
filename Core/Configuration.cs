@@ -1,6 +1,5 @@
-using System.IO;
-using System.Text.Json.Serialization;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace MohammedLab.ColorVision.Core;
 
@@ -17,7 +16,7 @@ public sealed class AppConfig
     public int ZoneWidth { get; set; } = 400;
     public int ZoneHeight { get; set; } = 560;
     public int CaptureFps { get; set; } = 90;
-    public bool NoPreview { get; set; } = true;
+    public bool NoPreview { get; set; } = false;
     public bool ShowHud { get; set; } = true;
     public AimDevice Device { get; set; } = AimDevice.Mouse;
     public float Strength { get; set; } = 2.8f;
@@ -30,6 +29,8 @@ public sealed class AppConfig
     public bool AntiRecoilOn { get; set; }
     public float AntiRecoil { get; set; } = 6.0f;
     public bool AutoFire { get; set; }
+    public int TriggerThreshold { get; set; } = 60;
+    public bool SwapTriggers { get; set; }
 
     [JsonIgnore] public static int[] ZoneWidths { get; } = [160, 240, 320, 400, 480, 560, 640, 800];
     [JsonIgnore] public static int[] ZoneHeights { get; } = [160, 240, 320, 400, 480, 560, 640, 800];
@@ -39,15 +40,15 @@ public sealed class AppConfig
 public sealed class SettingsStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true, PropertyNameCaseInsensitive = true };
-    public string Folder { get; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MohammedLab", "ColorVision");
-    public string FilePath => Path.Combine(Folder, "settings.json");
+    public string Folder { get; } = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MohammedLab", "ColorVision");
+    public string FilePath => System.IO.Path.Combine(Folder, "settings.json");
 
     public AppConfig Load()
     {
         try
         {
-            if (!File.Exists(FilePath)) return new AppConfig();
-            var value = JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(FilePath), JsonOptions) ?? new AppConfig();
+            if (!System.IO.File.Exists(FilePath)) return new AppConfig();
+            var value = JsonSerializer.Deserialize<AppConfig>(System.IO.File.ReadAllText(FilePath), JsonOptions) ?? new AppConfig();
             Clamp(value);
             return value;
         }
@@ -57,10 +58,10 @@ public sealed class SettingsStore
     public void Save(AppConfig value)
     {
         Clamp(value);
-        Directory.CreateDirectory(Folder);
+        System.IO.Directory.CreateDirectory(Folder);
         var tmp = FilePath + ".tmp";
-        File.WriteAllText(tmp, JsonSerializer.Serialize(value, JsonOptions));
-        File.Move(tmp, FilePath, true);
+        System.IO.File.WriteAllText(tmp, JsonSerializer.Serialize(value, JsonOptions));
+        System.IO.File.Move(tmp, FilePath, true);
     }
 
     public static void Clamp(AppConfig s)
@@ -72,6 +73,7 @@ public sealed class SettingsStore
         s.Strength = Math.Clamp(s.Strength, 1f, 10f);
         s.AimPointOffsetPx = Math.Clamp(s.AimPointOffsetPx, -100, 100);
         s.AntiRecoil = Math.Clamp(s.AntiRecoil, 0f, 20f);
+        s.TriggerThreshold = Math.Clamp(s.TriggerThreshold, 1, 255);
     }
 
     private static int Nearest(int value, IReadOnlyList<int> options) => options.OrderBy(x => Math.Abs(x - value)).First();
