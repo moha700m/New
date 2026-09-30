@@ -14,6 +14,7 @@
     <Company>Mohammed Lab</Company>
     <Product>Mohammed Lab PC</Product>
     <Description>Screen color detection and controller companion for Windows by Mohammed Lab.</Description>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
