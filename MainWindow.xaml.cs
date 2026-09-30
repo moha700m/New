@@ -11,6 +11,7 @@ using Microsoft.Win32;
 using MohammedLab.ColorVision.Core;
 using Brush = System.Windows.Media.Brush;
 using Brushes = System.Windows.Media.Brushes;
+using Button = System.Windows.Controls.Button;
 using Color = System.Windows.Media.Color;
 
 namespace MohammedLab.ColorVision;
@@ -239,7 +240,6 @@ public partial class MainWindow : Window
                 TxtPreviewLive.Text = "LIVE";
                 StatusText.Text = "Capturing";
             }
-
             UpdateCaptureStats();
             if (_overlay is { IsVisible: true }) _overlay.UpdateTarget(_engine.LastDetection, _settings.ZoneWidth, _settings.ZoneHeight);
         }, DispatcherPriority.Background);
@@ -314,7 +314,6 @@ public partial class MainWindow : Window
         TxtLeftStick.Text = connected ? $"X {g.sThumbLX,6}  /  Y {g.sThumbLY,6}" : "X 0  /  Y 0";
         TxtRightStick.Text = connected ? $"X {g.sThumbRX,6}  /  Y {g.sThumbRY,6}" : "X 0  /  Y 0";
         TxtTriggers.Text = connected ? $"L2 {g.bLeftTrigger / 255.0:P0}  /  R2 {g.bRightTrigger / 255.0:P0}" : "L2 0%  /  R2 0%";
-
         SetPad(PadL1, connected && g.wButtons.HasFlag(XInput.Buttons.LeftShoulder));
         SetPad(PadR1, connected && g.wButtons.HasFlag(XInput.Buttons.RightShoulder));
         SetPad(PadL2, connected && g.bLeftTrigger >= _settings.TriggerThreshold);
@@ -361,12 +360,7 @@ public partial class MainWindow : Window
 
     private void UpdateHudVisibility()
     {
-        if (!_engine.Running || !_settings.ShowHud)
-        {
-            HideOverlay();
-            return;
-        }
-
+        if (!_engine.Running || !_settings.ShowHud) { HideOverlay(); return; }
         try
         {
             _overlay ??= new OverlayWindow();
@@ -392,12 +386,7 @@ public partial class MainWindow : Window
 
     private void BtnReplug_Click(object sender, RoutedEventArgs e)
     {
-        try
-        {
-            _engine.ReplugController();
-            StatusText.Text = "Controller reconnected";
-            HideError();
-        }
+        try { _engine.ReplugController(); StatusText.Text = "Controller reconnected"; HideError(); }
         catch (Exception ex) { ShowError("Controller reconnect failed: " + ex.Message); }
     }
 
@@ -436,31 +425,21 @@ public partial class MainWindow : Window
     {
         TxtCheckOs.Text = $"✔ Windows: {Environment.OSVersion.Version}";
         TxtCheckRuntime.Text = $"✔ .NET Runtime: {Environment.Version}";
-
         var openCv = ColorDetector.OpenCvVersion();
         var openCvReady = !openCv.StartsWith("Unavailable", StringComparison.OrdinalIgnoreCase);
         SetCheckText(TxtCheckOpenCv, openCvReady, $"OpenCV: {openCv}");
-
         var monitorCount = System.Windows.Forms.Screen.AllScreens.Length;
         SetCheckText(TxtCheckMonitors, monitorCount > 0, $"Monitor availability: {monitorCount} detected");
-
         using (var probe = new ScreenCapture())
         {
             var capture = probe.TryProbe(Math.Clamp(_settings.ScreenIndex, 0, Math.Max(0, monitorCount - 1)));
             SetCheckText(TxtCheckCapture, capture.Ready, "Capture availability: " + capture.Message);
         }
-
         var physical = XInput.TryGetState(0, out _);
         SetCheckText(TxtCheckPad, physical, physical ? "Controller: Connected" : "Controller: Not detected");
-
         var vigemInstalled = ServiceExists("ViGEmBus");
-        if (!vigemInstalled)
-        {
-            using var test = new VirtualController();
-            vigemInstalled = test.Connect();
-        }
+        if (!vigemInstalled) { using var test = new VirtualController(); vigemInstalled = test.Connect(); }
         SetCheckText(TxtCheckVigem, vigemInstalled, vigemInstalled ? "ViGEm: Ready" : "ViGEm: Missing / unavailable");
-
         var hidHide = ServiceExists("HidHide") || HidHideFolderExists();
         SetCheckText(TxtCheckHidHide, hidHide, hidHide ? "HidHide: Ready" : "HidHide: Missing");
     }
@@ -479,11 +458,7 @@ public partial class MainWindow : Window
 
     private static bool HidHideFolderExists()
     {
-        try
-        {
-            var pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-            return Directory.Exists(Path.Combine(pf, "Nefarius Software Solutions", "HidHide"));
-        }
+        try { var pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles); return Directory.Exists(Path.Combine(pf, "Nefarius Software Solutions", "HidHide")); }
         catch { return false; }
     }
 
@@ -508,7 +483,6 @@ public partial class MainWindow : Window
         GuidePage.Visibility = Visibility.Collapsed;
         CheckPage.Visibility = Visibility.Collapsed;
         page.Visibility = Visibility.Visible;
-
         foreach (var nav in new[] { NavCapture, NavGame, NavGuide, NavCheck })
         {
             nav.Background = nav == selectedNav ? ResourceBrush("Panel2Brush") : Brushes.Transparent;
