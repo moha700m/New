@@ -5,13 +5,15 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using MohammedLab.ColorVision.Core;
+using MohammedLab.ColorVision.Models;
 using Brush = System.Windows.Media.Brush;
-using Brushes = System.Windows.Media.Brushes;
 using Button = System.Windows.Controls.Button;
+using WBrushes = System.Windows.Media.Brushes;
 using Color = System.Windows.Media.Color;
 
 namespace MohammedLab.ColorVision;
@@ -26,6 +28,14 @@ public partial class MainWindow : Window
     private bool _loading = true;
     private bool _captureHasFrame;
     private XInput.State _latestPhysicalState;
+    private Storyboard? _capturePulse;
+    private Storyboard? _toastStoryboard;
+    private DateTime _lastTesterUpdate = DateTime.MinValue;
+    private bool _lastControllerConnected;
+    private bool _toastShownForRunning;
+
+    private static readonly bool AnimationsAllowed =
+        SystemParameters.ClientAreaAnimation && SystemParameters.MinimizeAnimation;
 
     [DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr hObject);
 
@@ -41,6 +51,8 @@ public partial class MainWindow : Window
         LoadSettingsToUi();
         ShowPage(CapturePage, NavCapture);
         RunCheck();
+        _lastControllerConnected = XInput.TryGetState(0, out _);
+        _loadedOnce = true;
 
         _uiTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
         _uiTimer.Tick += UiTimer_Tick;
@@ -49,6 +61,8 @@ public partial class MainWindow : Window
         Closed += async (_, _) =>
         {
             _uiTimer.Stop();
+            StopCapturePulse();
+            _toastStoryboard?.Stop();
             HideOverlay();
             await _engine.StopAsync();
             _engine.Dispose();
@@ -79,7 +93,7 @@ public partial class MainWindow : Window
             CmbHeight.SelectedItem = _settings.ZoneHeight;
             ChkNoPreview.IsChecked = _settings.NoPreview;
             ChkHud.IsChecked = _settings.ShowHud;
-            CmbDevice.SelectedIndex = (int)_settings.Device;
+            UpdateDeviceSegments();
             CmbAimButton.SelectedItem = _settings.AimButton;
             CmbFireButton.SelectedItem = _settings.FireButton;
             foreach (var item in CmbAimKey.Items.OfType<ComboBoxItem>())
@@ -110,7 +124,6 @@ public partial class MainWindow : Window
         _settings.ZoneHeight = CmbHeight.SelectedItem is int height ? height : 560;
         _settings.NoPreview = ChkNoPreview.IsChecked == true;
         _settings.ShowHud = ChkHud.IsChecked == true;
-        _settings.Device = (AimDevice)Math.Clamp(CmbDevice.SelectedIndex, 0, 1);
         if (CmbAimButton.SelectedItem is PadButton aim) _settings.AimButton = aim;
         if (CmbFireButton.SelectedItem is PadButton fire) _settings.FireButton = fire;
         if (CmbAimKey.SelectedItem is ComboBoxItem keyItem && int.TryParse(keyItem.Tag?.ToString(), out var key)) _settings.AimKey = key;
@@ -128,6 +141,7 @@ public partial class MainWindow : Window
         _engine.ApplyConfig(_settings);
         RefreshUiText();
         UpdateHudVisibility();
+        ShowToast("Settings saved", ResourceBrush("SuccessBrush"));
     }
 
     private void RefreshUiText()
@@ -148,6 +162,7 @@ public partial class MainWindow : Window
         {
             ImgPreview.Source = null;
             ImgPreview.Visibility = Visibility.Collapsed;
+            PreviewOverlay.Visibility = Visibility.Collapsed;
             PreviewPlaceholder.Visibility = Visibility.Visible;
             TxtPreviewHint.Text = _engine.Running ? "Preview disabled • Capture is still running" : "Preview disabled";
         }
@@ -156,10 +171,36 @@ public partial class MainWindow : Window
             ImgPreview.Visibility = Visibility.Visible;
             if (ImgPreview.Source is null)
             {
+                PreviewOverlay.Visibility = Visibility.Collapsed;
                 PreviewPlaceholder.Visibility = Visibility.Visible;
-                TxtPreviewHint.Text = _engine.Running ? "Waiting for first frame…" : "Press START CAPTURE to begin";
+                TxtPreviewHint.Text = _engine.Running ? "Waiting for first frame…" : "Start capture to preview the selected region.";
             }
         }
+    }
+
+    private void UpdateDeviceSegments()
+    {
+        var isController = _settings.Device == AimDevice.Controller;
+        SetSegment(DeviceMouse, !isController);
+        SetSegment(DeviceController, isController);
+    }
+
+    private void SetSegment(Button button, bool active)
+    {
+        button.Background = active ? ResourceBrush("Brush.Accent.Subtle") : WBrushes.Transparent;
+        button.Foreground = active ? ResourceBrush("AccentBrush") : ResourceBrush("TextBrush");
+        button.BorderBrush = active ? ResourceBrush("Brush.Accent.SubtleBorder") : WBrushes.Transparent;
+        button.BorderThickness = new Thickness(1);
+    }
+
+    private void DeviceSegment_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button b || !int.TryParse(b.Tag?.ToString(), out var value)) return;
+        var device = (AimDevice)Math.Clamp(value, 0, 1);
+        if (_settings.Device == device) return;
+        _settings.Device = device;
+        UpdateDeviceSegments();
+        ReadUiToSettings();
     }
 
     private void SettingChanged(object sender, RoutedEventArgs e) => ReadUiToSettings();
@@ -175,18 +216,20 @@ public partial class MainWindow : Window
         ReadUiToSettings();
         HideError();
         _captureHasFrame = false;
+        _toastShownForRunning = false;
         SetCaptureStatus("Starting…", ResourceBrush("WarningBrush"), "Capture • Starting");
-        BtnToggle.Content = "STOP CAPTURE";
+        SetStartStopVisual(running: true);
         SetCaptureSensitiveEnabled(false);
 
         if (!_engine.Start())
         {
             SetCaptureSensitiveEnabled(true);
-            BtnToggle.Content = "START CAPTURE";
+            SetStartStopVisual(running: false);
             return;
         }
 
         StatusText.Text = "Starting capture";
+        StatusDot.Fill = ResourceBrush("WarningBrush");
         RefreshUiText();
         UpdateHudVisibility();
     }
@@ -195,14 +238,86 @@ public partial class MainWindow : Window
     {
         await _engine.StopAsync();
         _captureHasFrame = false;
-        BtnToggle.Content = "START CAPTURE";
+        SetStartStopVisual(running: false);
         SetCaptureSensitiveEnabled(true);
-        SetCaptureStatus("CAPTURE STOPPED", ResourceBrush("DisabledBrush"), "Capture • Stopped");
-        PreviewLiveDot.Fill = ResourceBrush("DisabledBrush");
+        StopCapturePulse();
+        SetCaptureStatus("CAPTURE STOPPED", ResourceBrush("Brush.Text.Muted"), "Capture • Stopped");
+        PreviewLiveDot.Fill = ResourceBrush("Brush.Text.Muted");
         TxtPreviewLive.Text = "OFFLINE";
         StatusText.Text = "Ready";
+        StatusDot.Fill = ResourceBrush("Brush.Text.Muted");
         HideOverlay();
         RefreshUiText();
+        ShowToast("Capture stopped", ResourceBrush("Brush.Text.Secondary"));
+    }
+
+    private void SetStartStopVisual(bool running)
+    {
+        BtnToggle.Content = running ? "STOP CAPTURE" : "START CAPTURE";
+        BtnToggle.Style = (Style)FindResource(running ? "DangerButton" : "PrimaryButton");
+    }
+
+    private void SetCapturingVisual()
+    {
+        SetCaptureStatus("CAPTURING", ResourceBrush("SuccessBrush"), "Capture • Live");
+        PreviewLiveDot.Fill = ResourceBrush("SuccessBrush");
+        TxtPreviewLive.Text = "LIVE";
+        StatusText.Text = "Capturing";
+        StatusDot.Fill = ResourceBrush("SuccessBrush");
+        StartCapturePulse();
+        if (!_toastShownForRunning)
+        {
+            _toastShownForRunning = true;
+            ShowToast("Capture started", ResourceBrush("SuccessBrush"));
+        }
+    }
+
+    private void StartCapturePulse()
+    {
+        if (!AnimationsAllowed) return;
+        if (_capturePulse is not null) return;
+        var animation = new DoubleAnimation(1.0, 0.35, TimeSpan.FromSeconds(0.9))
+        {
+            AutoReverse = true,
+            RepeatBehavior = RepeatBehavior.Forever,
+            EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
+        };
+        var storyboard = new Storyboard();
+        storyboard.Children.Add(animation);
+        Storyboard.SetTarget(animation, CaptureStateDot);
+        Storyboard.SetTargetProperty(animation, new PropertyPath(OpacityProperty));
+        _capturePulse = storyboard;
+        storyboard.Begin();
+    }
+
+    private void StopCapturePulse()
+    {
+        _capturePulse?.Stop();
+        _capturePulse = null;
+        CaptureStateDot.Opacity = 1.0;
+    }
+
+    private void ShowToast(string message, Brush accent)
+    {
+        ToastText.Text = message;
+        ToastDot.Fill = accent;
+        _toastStoryboard?.Stop();
+        var fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        var fadeOut = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(220)) { BeginTime = TimeSpan.FromMilliseconds(2600) };
+        var slideIn = new DoubleAnimation(8, 0, TimeSpan.FromMilliseconds(140)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        var storyboard = new Storyboard { FillBehavior = FillBehavior.Stop };
+        storyboard.Children.Add(fadeIn);
+        storyboard.Children.Add(fadeOut);
+        storyboard.Children.Add(slideIn);
+        Storyboard.SetTarget(fadeIn, ToastCard);
+        Storyboard.SetTargetProperty(fadeIn, new PropertyPath(OpacityProperty));
+        Storyboard.SetTarget(fadeOut, ToastCard);
+        Storyboard.SetTargetProperty(fadeOut, new PropertyPath(OpacityProperty));
+        Storyboard.SetTarget(slideIn, ToastCard);
+        Storyboard.SetTargetProperty(slideIn, new PropertyPath("RenderTransform.Y"));
+        storyboard.Completed += (_, _) => { ToastCard.Opacity = 0; ToastShift.Y = 8; };
+        _toastStoryboard = storyboard;
+        storyboard.Begin();
     }
 
     private async void BtnRetry_Click(object sender, RoutedEventArgs e)
@@ -235,12 +350,10 @@ public partial class MainWindow : Window
             if (!_captureHasFrame && _engine.FrameCount > 0)
             {
                 _captureHasFrame = true;
-                SetCaptureStatus("CAPTURING", ResourceBrush("SuccessBrush"), "Capture • Live");
-                PreviewLiveDot.Fill = ResourceBrush("SuccessBrush");
-                TxtPreviewLive.Text = "LIVE";
-                StatusText.Text = "Capturing";
+                SetCapturingVisual();
             }
             UpdateCaptureStats();
+            UpdatePreviewOverlay(_engine.LastDetection);
             if (_overlay is { IsVisible: true }) _overlay.UpdateTarget(_engine.LastDetection, _settings.ZoneWidth, _settings.ZoneHeight);
         }, DispatcherPriority.Background);
     }
@@ -257,9 +370,7 @@ public partial class MainWindow : Window
                 if (!_captureHasFrame)
                 {
                     _captureHasFrame = true;
-                    SetCaptureStatus("CAPTURING", ResourceBrush("SuccessBrush"), "Capture • Live");
-                    PreviewLiveDot.Fill = ResourceBrush("SuccessBrush");
-                    TxtPreviewLive.Text = "LIVE";
+                    SetCapturingVisual();
                 }
             }
             finally { bitmap.Dispose(); }
@@ -288,18 +399,70 @@ public partial class MainWindow : Window
         StatProcessing.Text = $"{d.ProcessingMs:0.00} ms";
         StatDropped.Text = _engine.DroppedFrames.ToString("N0");
         StatCandidates.Text = d.CandidateCount.ToString();
-        StatTarget.Text = d.Found ? "TARGET DETECTED" : "NO TARGET";
+        StatTarget.Text = d.Found ? "✔ TARGET DETECTED" : "NO TARGET";
         StatTarget.Foreground = d.Found ? ResourceBrush("SuccessBrush") : ResourceBrush("MutedBrush");
+    }
+
+    private void UpdatePreviewOverlay(DetectionResult d)
+    {
+        if (ImgPreview.Source is not BitmapSource { IsFrozen: true } source || PreviewOverlay.ActualWidth <= 0 || PreviewOverlay.ActualHeight <= 0)
+        {
+            PreviewOverlay.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        PreviewOverlay.Visibility = Visibility.Visible;
+        var scale = Math.Min(PreviewOverlay.ActualWidth / source.PixelWidth, PreviewOverlay.ActualHeight / source.PixelHeight);
+        var offsetX = (PreviewOverlay.ActualWidth - source.PixelWidth * scale) / 2;
+        var offsetY = (PreviewOverlay.ActualHeight - source.PixelHeight * scale) / 2;
+        var cx = offsetX + source.PixelWidth * scale / 2;
+        var cy = offsetY + source.PixelHeight * scale / 2;
+        Canvas.SetLeft(PreviewCenterH, cx);
+        Canvas.SetTop(PreviewCenterH, cy);
+        Canvas.SetLeft(PreviewCenterV, cx);
+        Canvas.SetTop(PreviewCenterV, cy);
+
+        if (!d.Found)
+        {
+            PreviewTargetBox.Visibility = Visibility.Collapsed;
+            PreviewTargetDot.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        Canvas.SetLeft(PreviewTargetBox, offsetX + d.Bounds.X * scale);
+        Canvas.SetTop(PreviewTargetBox, offsetY + d.Bounds.Y * scale);
+        PreviewTargetBox.Width = Math.Max(2, d.Bounds.Width * scale);
+        PreviewTargetBox.Height = Math.Max(2, d.Bounds.Height * scale);
+        Canvas.SetLeft(PreviewTargetDot, offsetX + d.Target.X * scale - 3);
+        Canvas.SetTop(PreviewTargetDot, offsetY + d.Target.Y * scale - 3);
+        PreviewTargetBox.Visibility = Visibility.Visible;
+        PreviewTargetDot.Visibility = Visibility.Visible;
     }
 
     private void UiTimer_Tick(object? sender, EventArgs e)
     {
         var connected = XInput.TryGetState(0, out _latestPhysicalState);
-        HeaderControllerDot.Fill = connected ? ResourceBrush("SuccessBrush") : ResourceBrush("DisabledBrush");
+        HeaderControllerDot.Fill = connected ? ResourceBrush("SuccessBrush") : ResourceBrush("Brush.Text.Muted");
         HeaderControllerText.Text = connected ? "Controller • Connected" : "Controller • Not connected";
         TxtControllerConnection.Text = connected ? "CONNECTED" : "NOT CONNECTED";
         TxtControllerConnection.Foreground = connected ? ResourceBrush("SuccessBrush") : ResourceBrush("DangerBrush");
-        UpdateControllerTester(connected, _latestPhysicalState.Gamepad);
+        ControllerCardDot.Fill = connected ? ResourceBrush("SuccessBrush") : ResourceBrush("DangerBrush");
+        UpdateVirtualControllerStatus();
+
+        if (connected != _lastControllerConnected)
+        {
+            _lastControllerConnected = connected;
+            if (_loadedOnce) ShowToast(connected ? "Controller connected" : "Controller disconnected",
+                connected ? ResourceBrush("SuccessBrush") : ResourceBrush("WarningBrush"));
+        }
+
+        // Throttle tester visuals to 60 Hz max.
+        var now = DateTime.UtcNow;
+        if ((now - _lastTesterUpdate).TotalMilliseconds >= 16)
+        {
+            _lastTesterUpdate = now;
+            UpdateControllerTester(connected, _latestPhysicalState.Gamepad);
+        }
 
         if (_engine.Running && _engine.LastFrameUtc != default)
         {
@@ -309,11 +472,30 @@ public partial class MainWindow : Window
         else StatLastFrame.Text = "Last frame: —";
     }
 
+    private bool _loadedOnce;
+    private string _lastVirtualStatus = "";
+
+    private void UpdateVirtualControllerStatus()
+    {
+        var status = _engine.VirtualControllerStatus;
+        if (string.Equals(status, _lastVirtualStatus, StringComparison.Ordinal)) return;
+        _lastVirtualStatus = status;
+        var ready = !string.IsNullOrWhiteSpace(status) &&
+                    (status.Contains("ready", StringComparison.OrdinalIgnoreCase) || status.Contains("connected", StringComparison.OrdinalIgnoreCase));
+        TxtVirtualController.Text = $"Virtual controller: {status}";
+        VirtualControllerDot.Fill = ready ? ResourceBrush("SuccessBrush") : ResourceBrush("WarningBrush");
+    }
+
     private void UpdateControllerTester(bool connected, XInput.Gamepad g)
     {
         TxtLeftStick.Text = connected ? $"X {g.sThumbLX,6}  /  Y {g.sThumbLY,6}" : "X 0  /  Y 0";
         TxtRightStick.Text = connected ? $"X {g.sThumbRX,6}  /  Y {g.sThumbRY,6}" : "X 0  /  Y 0";
-        TxtTriggers.Text = connected ? $"L2 {g.bLeftTrigger / 255.0:P0}  /  R2 {g.bRightTrigger / 255.0:P0}" : "L2 0%  /  R2 0%";
+        var l2 = connected ? g.bLeftTrigger : (byte)0;
+        var r2 = connected ? g.bRightTrigger : (byte)0;
+        TxtL2.Text = $"{l2 / 255.0:P0}";
+        TxtR2.Text = $"{r2 / 255.0:P0}";
+        if (L2Bar.Parent is FrameworkElement l2Host) L2Bar.Width = l2Host.ActualWidth * (l2 / 255.0);
+        if (R2Bar.Parent is FrameworkElement r2Host) R2Bar.Width = r2Host.ActualWidth * (r2 / 255.0);
         SetPad(PadL1, connected && g.wButtons.HasFlag(XInput.Buttons.LeftShoulder));
         SetPad(PadR1, connected && g.wButtons.HasFlag(XInput.Buttons.RightShoulder));
         SetPad(PadL2, connected && g.bLeftTrigger >= _settings.TriggerThreshold);
@@ -334,7 +516,7 @@ public partial class MainWindow : Window
 
     private void SetPad(Border border, bool pressed)
     {
-        border.Background = pressed ? ResourceBrush("AccentBrush") : ResourceBrush("Panel2Brush");
+        border.Background = pressed ? ResourceBrush("AccentBrush") : ResourceBrush("Brush.Raised");
         border.BorderBrush = pressed ? ResourceBrush("AccentHoverBrush") : ResourceBrush("BorderBrush");
         if (border.Child is TextBlock text) text.Foreground = pressed ? new SolidColorBrush(Color.FromRgb(24, 26, 31)) : ResourceBrush("TextBrush");
     }
@@ -342,11 +524,14 @@ public partial class MainWindow : Window
     private void Engine_Faulted(string text) => Dispatcher.BeginInvoke(async () =>
     {
         ShowError("Capture failed: " + text);
+        StopCapturePulse();
         SetCaptureStatus("CAPTURE ERROR", ResourceBrush("DangerBrush"), "Capture • Error");
         StatusText.Text = "Capture error";
-        BtnToggle.Content = "START CAPTURE";
+        StatusDot.Fill = ResourceBrush("DangerBrush");
+        SetStartStopVisual(running: false);
         SetCaptureSensitiveEnabled(true);
         HideOverlay();
+        ShowToast("Capture failed", ResourceBrush("DangerBrush"));
         try { await _engine.StopAsync(); } catch { }
     });
 
@@ -405,9 +590,7 @@ public partial class MainWindow : Window
         for (var i = 0; i < buttons.Length; i++)
         {
             var selected = i == Math.Clamp((int)_settings.Game, 0, 3);
-            buttons[i].Background = selected ? ResourceBrush("AccentBrush") : ResourceBrush("Panel2Brush");
-            buttons[i].Foreground = selected ? new SolidColorBrush(Color.FromRgb(24, 26, 31)) : ResourceBrush("TextBrush");
-            buttons[i].BorderBrush = selected ? ResourceBrush("AccentBrush") : ResourceBrush("BorderBrush");
+            SetSegment(buttons[i], selected);
         }
     }
 
@@ -423,31 +606,40 @@ public partial class MainWindow : Window
 
     private void RunCheck()
     {
-        TxtCheckOs.Text = $"✔ Windows: {Environment.OSVersion.Version}";
-        TxtCheckRuntime.Text = $"✔ .NET Runtime: {Environment.Version}";
+        SetCheckRow(ChkOsDot, TxtCheckOsState, true);
+        TxtCheckOs.Text = $"Version {Environment.OSVersion.Version}";
+        SetCheckRow(ChkRuntimeDot, TxtCheckRuntimeState, true);
+        TxtCheckRuntime.Text = $"Version {Environment.Version}";
         var openCv = ColorDetector.OpenCvVersion();
         var openCvReady = !openCv.StartsWith("Unavailable", StringComparison.OrdinalIgnoreCase);
-        SetCheckText(TxtCheckOpenCv, openCvReady, $"OpenCV: {openCv}");
+        SetCheckRow(ChkOpenCvDot, TxtCheckOpenCvState, openCvReady);
+        TxtCheckOpenCv.Text = openCv;
         var monitorCount = System.Windows.Forms.Screen.AllScreens.Length;
-        SetCheckText(TxtCheckMonitors, monitorCount > 0, $"Monitor availability: {monitorCount} detected");
+        SetCheckRow(ChkMonitorsDot, TxtCheckMonitorsState, monitorCount > 0);
+        TxtCheckMonitors.Text = $"{monitorCount} detected";
         using (var probe = new ScreenCapture())
         {
             var capture = probe.TryProbe(Math.Clamp(_settings.ScreenIndex, 0, Math.Max(0, monitorCount - 1)));
-            SetCheckText(TxtCheckCapture, capture.Ready, "Capture availability: " + capture.Message);
+            SetCheckRow(ChkCaptureDot, TxtCheckCaptureState, capture.Ready);
+            TxtCheckCapture.Text = capture.Message;
         }
         var physical = XInput.TryGetState(0, out _);
-        SetCheckText(TxtCheckPad, physical, physical ? "Controller: Connected" : "Controller: Not detected");
+        SetCheckRow(ChkPadDot, TxtCheckPadState, physical);
+        TxtCheckPad.Text = physical ? "Connected" : "Not detected";
         var vigemInstalled = ServiceExists("ViGEmBus");
         if (!vigemInstalled) { using var test = new VirtualController(); vigemInstalled = test.Connect(); }
-        SetCheckText(TxtCheckVigem, vigemInstalled, vigemInstalled ? "ViGEm: Ready" : "ViGEm: Missing / unavailable");
+        SetCheckRow(ChkVigemDot, TxtCheckVigemState, vigemInstalled);
+        TxtCheckVigem.Text = vigemInstalled ? "Virtual controller driver ready" : "Missing / unavailable";
         var hidHide = ServiceExists("HidHide") || HidHideFolderExists();
-        SetCheckText(TxtCheckHidHide, hidHide, hidHide ? "HidHide: Ready" : "HidHide: Missing");
+        SetCheckRow(ChkHidHideDot, TxtCheckHidHideState, hidHide);
+        TxtCheckHidHide.Text = hidHide ? "Ready" : "Missing";
     }
 
-    private void SetCheckText(TextBlock block, bool ready, string message)
+    private void SetCheckRow(System.Windows.Shapes.Ellipse dot, TextBlock state, bool ready)
     {
-        block.Text = (ready ? "✔ " : "✖ ") + message;
-        block.Foreground = ready ? ResourceBrush("SuccessBrush") : ResourceBrush("DangerBrush");
+        dot.Fill = ready ? ResourceBrush("SuccessBrush") : ResourceBrush("DangerBrush");
+        state.Text = ready ? "✔ READY" : "✖ MISSING";
+        state.Foreground = ready ? ResourceBrush("SuccessBrush") : ResourceBrush("DangerBrush");
     }
 
     private static bool ServiceExists(string name)
@@ -483,11 +675,15 @@ public partial class MainWindow : Window
         GuidePage.Visibility = Visibility.Collapsed;
         CheckPage.Visibility = Visibility.Collapsed;
         page.Visibility = Visibility.Visible;
+        HeaderPageTitle.Text = page == CapturePage ? "Capture"
+            : page == GamePage ? "Game Control"
+            : page == GuidePage ? "Guide"
+            : "Check";
         foreach (var nav in new[] { NavCapture, NavGame, NavGuide, NavCheck })
         {
-            nav.Background = nav == selectedNav ? ResourceBrush("Panel2Brush") : Brushes.Transparent;
-            nav.BorderBrush = nav == selectedNav ? ResourceBrush("BorderBrush") : Brushes.Transparent;
-            nav.Foreground = nav == selectedNav ? ResourceBrush("AccentBrush") : ResourceBrush("TextBrush");
+            var active = nav == selectedNav;
+            nav.Tag = active ? "NavActive" : null;
+            nav.Foreground = active ? ResourceBrush("AccentBrush") : ResourceBrush("TextBrush");
         }
     }
 }
