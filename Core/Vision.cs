@@ -29,7 +29,7 @@ public sealed class ScreenCapture : IDisposable
         var x = bounds.Left + (bounds.Width - width) / 2;
         var y = bounds.Top + (bounds.Height - height) / 2;
         using var g = Graphics.FromImage(_buffer);
-        g.CopyFromScreen(x, y, 0, 0, new Size(width, height), CopyPixelOperation.SourceCopy);
+        g.CopyFromScreen(x, y, 0, 0, new System.Drawing.Size(width, height), CopyPixelOperation.SourceCopy);
         return _buffer;
     }
 
