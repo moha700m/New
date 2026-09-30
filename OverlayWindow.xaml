@@ -1,0 +1,15 @@
+<Window x:Class="MohammedLab.ColorVision.OverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        ShowInTaskbar="False" Topmost="True" ShowActivated="False" Focusable="False" IsHitTestVisible="False">
+    <Grid IsHitTestVisible="False">
+        <Border BorderBrush="#FFFF8A24" BorderThickness="2" Background="#05000000"/>
+        <Canvas x:Name="OverlayCanvas">
+            <Rectangle x:Name="TargetBox" Stroke="#FF42D392" StrokeThickness="2" Visibility="Collapsed"/>
+            <Ellipse x:Name="TargetDot" Fill="#FF42D392" Width="8" Height="8" Visibility="Collapsed"/>
+            <Line x:Name="CenterH" Stroke="#FFFF8A24" StrokeThickness="1.5" X1="-8" X2="8" Y1="0" Y2="0"/>
+            <Line x:Name="CenterV" Stroke="#FFFF8A24" StrokeThickness="1.5" X1="0" X2="0" Y1="-8" Y2="8"/>
+        </Canvas>
+    </Grid>
+</Window>
