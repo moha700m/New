@@ -1,120 +1,189 @@
 <Window x:Class="MohammedLab.ColorVision.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Mohammed Lab PC" Width="1080" Height="720" MinWidth="980" MinHeight="640"
+        Title="Mohammed Lab PC" Width="1320" Height="840" MinWidth="1120" MinHeight="720"
         WindowStartupLocation="CenterScreen" Background="{StaticResource BgBrush}">
     <Grid>
-        <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-        <Border Grid.Column="0" Background="#0D1118" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0">
-            <Grid Margin="14">
-                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                <StackPanel>
-                    <TextBlock Text="MOHAMMED LAB" Foreground="{StaticResource AccentBrush}" FontWeight="Bold" FontSize="13"/>
-                    <TextBlock Text="PC" FontWeight="Bold" FontSize="27" Margin="0,2,0,0"/>
-                    <TextBlock Text="PC Color Detection" Foreground="{StaticResource MutedBrush}"/>
-                </StackPanel>
-                <StackPanel Grid.Row="1" Margin="0,26,0,0">
-                    <Button x:Name="NavCapture" Content="Capture" HorizontalContentAlignment="Left" Click="NavCapture_Click"/>
-                    <Button x:Name="NavGame" Content="Game Control" HorizontalContentAlignment="Left" Click="NavGame_Click"/>
-                    <Button x:Name="NavGuide" Content="Guide" HorizontalContentAlignment="Left" Click="NavGuide_Click"/>
-                    <Button x:Name="NavCheck" Content="Check" HorizontalContentAlignment="Left" Click="NavCheck_Click"/>
-                </StackPanel>
-                <Border Grid.Row="2" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="10" Padding="12">
-                    <StackPanel>
-                        <TextBlock Text="Mohammed Lab" FontWeight="SemiBold"/>
-                        <TextBlock Text="Ready" x:Name="StatusText" Foreground="{StaticResource MutedBrush}" Margin="0,3,0,0"/>
-                        <TextBlock x:Name="StatusDevice" Text="Device: Mouse" Foreground="{StaticResource MutedBrush}" Margin="0,2,0,0"/>
+        <Grid.RowDefinitions><RowDefinition Height="64"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="196"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+
+        <Border Grid.Row="0" Grid.ColumnSpan="2" Background="{StaticResource SidebarBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+            <Grid Margin="18,0">
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Width="34" Height="34" CornerRadius="9" Background="{StaticResource AccentBrush}" Margin="0,0,10,0">
+                        <TextBlock Text="ML" Foreground="#181A1F" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                    </Border>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="Mohammed Lab PC" FontSize="18" FontWeight="SemiBold"/>
+                        <TextBlock Text="Color Detection  •  v1.5.11" Foreground="{StaticResource MutedBrush}" FontSize="11"/>
                     </StackPanel>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Style="{StaticResource StatusChip}"><StackPanel Orientation="Horizontal"><Ellipse x:Name="HeaderControllerDot" Width="8" Height="8" Fill="{StaticResource DisabledBrush}" Margin="0,0,7,0"/><TextBlock x:Name="HeaderControllerText" Text="Controller • Not connected" FontSize="12"/></StackPanel></Border>
+                    <Border Style="{StaticResource StatusChip}"><StackPanel Orientation="Horizontal"><Ellipse x:Name="HeaderCaptureDot" Width="8" Height="8" Fill="{StaticResource DisabledBrush}" Margin="0,0,7,0"/><TextBlock x:Name="HeaderCaptureText" Text="Capture • Stopped" FontSize="12"/></StackPanel></Border>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="1" Grid.Column="0" Background="{StaticResource SidebarBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0">
+            <Grid Margin="12">
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <TextBlock Text="WORKSPACE" Foreground="{StaticResource DisabledBrush}" FontSize="11" FontWeight="SemiBold" Margin="10,8,0,8"/>
+                <StackPanel Grid.Row="1">
+                    <Button x:Name="NavCapture" Style="{StaticResource NavButton}" Content="Capture" Click="NavCapture_Click"/>
+                    <Button x:Name="NavGame" Style="{StaticResource NavButton}" Content="Game Control" Click="NavGame_Click"/>
+                    <Button x:Name="NavGuide" Style="{StaticResource NavButton}" Content="Guide" Click="NavGuide_Click"/>
+                    <Button x:Name="NavCheck" Style="{StaticResource NavButton}" Content="Check" Click="NavCheck_Click"/>
+                </StackPanel>
+                <Border Grid.Row="2" Style="{StaticResource RaisedCardStyle}" Margin="0,0,0,2" Padding="12">
+                    <StackPanel><TextBlock Text="Mohammed Lab" FontWeight="SemiBold"/><TextBlock x:Name="StatusText" Text="Ready" Foreground="{StaticResource MutedBrush}" Margin="0,3,0,0"/><TextBlock x:Name="StatusDevice" Text="Device: Mouse" Foreground="{StaticResource MutedBrush}" Margin="0,2,0,0"/></StackPanel>
                 </Border>
             </Grid>
         </Border>
 
-        <Grid Grid.Column="1" Margin="18">
+        <Grid Grid.Row="1" Grid.Column="1" Margin="18">
             <Grid x:Name="CapturePage">
-                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                <Grid>
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <Grid Margin="0,0,0,14">
                     <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                    <StackPanel><TextBlock Text="Capture" FontSize="26" FontWeight="Bold"/><TextBlock Text="Screen capture settings" Foreground="{StaticResource MutedBrush}"/></StackPanel>
-                    <Button x:Name="BtnToggle" Grid.Column="1" Style="{StaticResource PrimaryButton}" Content="Start" Click="BtnToggle_Click" Padding="22,10"/>
+                    <StackPanel><TextBlock Text="Capture" FontSize="26" FontWeight="Bold"/><TextBlock Text="Screen capture and real-time detection" Foreground="{StaticResource MutedBrush}"/></StackPanel>
+                    <Button x:Name="BtnToggle" Grid.Column="1" Style="{StaticResource PrimaryButton}" Content="START CAPTURE" Click="BtnToggle_Click" Padding="26,10" MinWidth="160"/>
                 </Grid>
-                <ScrollViewer Grid.Row="1" Margin="0,18,0,0" VerticalScrollBarVisibility="Auto">
-                    <StackPanel>
-                        <Border Style="{StaticResource Card}"><Grid>
-                            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
-                            <StackPanel Margin="0,0,14,0">
-                                <TextBlock Text="Monitor" FontWeight="SemiBold"/><ComboBox x:Name="CmbMonitor" SelectionChanged="SettingChanged"/>
-                                <TextBlock Text="Capture FPS" FontWeight="SemiBold" Margin="0,12,0,0"/><ComboBox x:Name="CmbFps" SelectionChanged="SettingChanged"/>
-                            </StackPanel>
-                            <StackPanel Grid.Column="1">
-                                <TextBlock Text="Zone Width" FontWeight="SemiBold"/><ComboBox x:Name="CmbWidth" SelectionChanged="SettingChanged"/>
-                                <TextBlock Text="Zone Height" FontWeight="SemiBold" Margin="0,12,0,0"/><ComboBox x:Name="CmbHeight" SelectionChanged="SettingChanged"/>
-                            </StackPanel>
-                        </Grid></Border>
-                        <Border Style="{StaticResource Card}"><StackPanel>
-                            <CheckBox x:Name="ChkNoPreview" Content="No Preview" Click="SettingChanged"/>
-                            <CheckBox x:Name="ChkHud" Content="Show HUD" Click="SettingChanged"/>
-                        </StackPanel></Border>
-                        <Border Style="{StaticResource Card}"><StackPanel>
-                            <TextBlock Text="Capture Status" FontWeight="SemiBold" FontSize="17"/>
-                            <TextBlock x:Name="TxtFps" Text="Capture: stopped" Margin="0,10,0,0"/>
-                            <TextBlock x:Name="TxtDet" Text="Detection: idle" Margin="0,4,0,0"/>
-                            <TextBlock x:Name="TxtFrames" Text="Target: none" Margin="0,4,0,0"/>
-                            <TextBlock Text="Marker color: #FF00FA" Foreground="{StaticResource MutedBrush}" Margin="0,8,0,0"/>
-                        </StackPanel></Border>
-                    </StackPanel>
-                </ScrollViewer>
+
+                <Border x:Name="ErrorBanner" Grid.Row="1" Visibility="Collapsed" Background="#2B1C21" BorderBrush="{StaticResource DangerBrush}" BorderThickness="1" CornerRadius="9" Padding="12" Margin="0,0,0,12">
+                    <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal"><TextBlock Text="●" Foreground="{StaticResource DangerBrush}" Margin="0,0,8,0"/><TextBlock x:Name="ErrorText" Text="Capture error" TextWrapping="Wrap"/></StackPanel>
+                        <Button Grid.Column="1" Content="Retry" Click="BtnRetry_Click" Margin="12,0,0,0" Padding="12,5" MinHeight="30"/>
+                    </Grid>
+                </Border>
+
+                <Grid Grid.Row="2">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="330"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <Border Style="{StaticResource CardStyle}"><StackPanel>
+                                <TextBlock Text="Capture Region" FontSize="16" FontWeight="SemiBold"/>
+                                <TextBlock Text="Monitor" Foreground="{StaticResource MutedBrush}" Margin="0,12,0,0"/><ComboBox x:Name="CmbMonitor" SelectionChanged="SettingChanged"/>
+                                <TextBlock Text="Target FPS" Foreground="{StaticResource MutedBrush}" Margin="0,8,0,0"/><ComboBox x:Name="CmbFps" SelectionChanged="SettingChanged"/>
+                                <Grid Margin="0,8,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="10"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                    <StackPanel><TextBlock Text="Width" Foreground="{StaticResource MutedBrush}"/><ComboBox x:Name="CmbWidth" SelectionChanged="SettingChanged"/></StackPanel>
+                                    <StackPanel Grid.Column="2"><TextBlock Text="Height" Foreground="{StaticResource MutedBrush}"/><ComboBox x:Name="CmbHeight" SelectionChanged="SettingChanged"/></StackPanel>
+                                </Grid>
+                                <CheckBox x:Name="ChkHud" Content="Show HUD" Click="SettingChanged"/>
+                                <CheckBox x:Name="ChkNoPreview" Content="No Preview" Click="SettingChanged"/>
+                            </StackPanel></Border>
+                            <Border Style="{StaticResource CardStyle}"><StackPanel>
+                                <TextBlock Text="Capture State" FontSize="16" FontWeight="SemiBold"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,12,0,0"><Ellipse x:Name="CaptureStateDot" Width="10" Height="10" Fill="{StaticResource DisabledBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/><TextBlock x:Name="TxtCaptureState" Text="CAPTURE STOPPED" FontWeight="SemiBold"/></StackPanel>
+                                <TextBlock x:Name="TxtCaptureSummary" Text="Monitor 1 • 400x560 • 90 FPS" Foreground="{StaticResource MutedBrush}" Margin="0,6,0,0" TextWrapping="Wrap"/>
+                                <TextBlock Text="Marker color: #FF00FA" Foreground="{StaticResource MutedBrush}" Margin="0,10,0,0"/>
+                            </StackPanel></Border>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <Grid Grid.Column="2">
+                        <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                        <Border Style="{StaticResource CardStyle}" Margin="0,0,0,12" MinHeight="390">
+                            <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                                <Grid Margin="0,0,0,12"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <StackPanel><TextBlock Text="LIVE CAPTURE" FontWeight="SemiBold" FontSize="16"/><TextBlock Text="The exact region used by color detection" Foreground="{StaticResource MutedBrush}" FontSize="12"/></StackPanel>
+                                    <Border Grid.Column="1" Style="{StaticResource StatusChip}" Padding="9,4"><StackPanel Orientation="Horizontal"><Ellipse x:Name="PreviewLiveDot" Width="7" Height="7" Fill="{StaticResource DisabledBrush}" Margin="0,0,6,0"/><TextBlock x:Name="TxtPreviewLive" Text="OFFLINE" FontSize="11" FontWeight="SemiBold"/></StackPanel></Border>
+                                </Grid>
+                                <Border Grid.Row="1" Background="#0E1014" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" ClipToBounds="True">
+                                    <Grid><Image x:Name="ImgPreview" Stretch="Uniform" RenderOptions.BitmapScalingMode="LowQuality"/>
+                                        <StackPanel x:Name="PreviewPlaceholder" VerticalAlignment="Center" HorizontalAlignment="Center"><TextBlock Text="Capture preview" FontSize="17" FontWeight="SemiBold" HorizontalAlignment="Center"/><TextBlock x:Name="TxtPreviewHint" Text="Press START CAPTURE to begin" Foreground="{StaticResource MutedBrush}" HorizontalAlignment="Center" Margin="0,6,0,0"/></StackPanel>
+                                    </Grid>
+                                </Border>
+                            </Grid>
+                        </Border>
+                        <UniformGrid Grid.Row="1" Columns="4" Rows="2">
+                            <Border Style="{StaticResource RaisedCardStyle}" Padding="12"><StackPanel><TextBlock Text="Frames" Foreground="{StaticResource MutedBrush}" FontSize="11"/><TextBlock x:Name="StatFrames" Text="0" FontSize="18" FontWeight="SemiBold" Margin="0,4,0,0"/></StackPanel></Border>
+                            <Border Style="{StaticResource RaisedCardStyle}" Padding="12"><StackPanel><TextBlock Text="Actual FPS" Foreground="{StaticResource MutedBrush}" FontSize="11"/><TextBlock x:Name="StatActualFps" Text="0.0" FontSize="18" FontWeight="SemiBold" Margin="0,4,0,0"/></StackPanel></Border>
+                            <Border Style="{StaticResource RaisedCardStyle}" Padding="12"><StackPanel><TextBlock Text="Target FPS" Foreground="{StaticResource MutedBrush}" FontSize="11"/><TextBlock x:Name="StatTargetFps" Text="90" FontSize="18" FontWeight="SemiBold" Margin="0,4,0,0"/></StackPanel></Border>
+                            <Border Style="{StaticResource RaisedCardStyle}" Padding="12"><StackPanel><TextBlock Text="Grab" Foreground="{StaticResource MutedBrush}" FontSize="11"/><TextBlock x:Name="StatGrab" Text="0.00 ms" FontSize="18" FontWeight="SemiBold" Margin="0,4,0,0"/></StackPanel></Border>
+                            <Border Style="{StaticResource RaisedCardStyle}" Padding="12"><StackPanel><TextBlock Text="Processing" Foreground="{StaticResource MutedBrush}" FontSize="11"/><TextBlock x:Name="StatProcessing" Text="0.00 ms" FontSize="18" FontWeight="SemiBold" Margin="0,4,0,0"/></StackPanel></Border>
+                            <Border Style="{StaticResource RaisedCardStyle}" Padding="12"><StackPanel><TextBlock Text="Dropped" Foreground="{StaticResource MutedBrush}" FontSize="11"/><TextBlock x:Name="StatDropped" Text="0" FontSize="18" FontWeight="SemiBold" Margin="0,4,0,0"/></StackPanel></Border>
+                            <Border Style="{StaticResource RaisedCardStyle}" Padding="12"><StackPanel><TextBlock Text="Candidates" Foreground="{StaticResource MutedBrush}" FontSize="11"/><TextBlock x:Name="StatCandidates" Text="0" FontSize="18" FontWeight="SemiBold" Margin="0,4,0,0"/></StackPanel></Border>
+                            <Border Style="{StaticResource RaisedCardStyle}" Padding="12"><StackPanel><TextBlock Text="Target Status" Foreground="{StaticResource MutedBrush}" FontSize="11"/><TextBlock x:Name="StatTarget" Text="NO TARGET" FontSize="14" FontWeight="SemiBold" Margin="0,6,0,0"/><TextBlock x:Name="StatLastFrame" Text="Last frame: —" Foreground="{StaticResource MutedBrush}" FontSize="10" Margin="0,3,0,0"/></StackPanel></Border>
+                        </UniformGrid>
+                    </Grid>
+                </Grid>
             </Grid>
 
             <Grid x:Name="GamePage" Visibility="Collapsed">
-                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                <StackPanel><TextBlock Text="Game Control" FontSize="26" FontWeight="Bold"/><TextBlock Text="Aim and controller settings" Foreground="{StaticResource MutedBrush}"/></StackPanel>
-                <ScrollViewer Grid.Row="1" Margin="0,18,0,0" VerticalScrollBarVisibility="Auto"><StackPanel>
-                    <Border Style="{StaticResource Card}"><StackPanel>
-                        <TextBlock Text="Game" FontWeight="SemiBold"/><ComboBox x:Name="CmbGame" SelectionChanged="SettingChanged"><ComboBoxItem Content="BO7"/><ComboBoxItem Content="BO6"/><ComboBoxItem Content="MW"/><ComboBoxItem Content="MW4"/><ComboBoxItem Content="Overwatch"/></ComboBox>
-                        <TextBlock Text="Device" FontWeight="SemiBold" Margin="0,10,0,0"/><ComboBox x:Name="CmbDevice" SelectionChanged="SettingChanged"><ComboBoxItem Content="Mouse"/><ComboBoxItem Content="Controller"/></ComboBox>
-                        <TextBlock x:Name="TxtDeviceNote" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" Margin="0,4,0,0"/>
-                    </StackPanel></Border>
-                    <Border Style="{StaticResource Card}"><Grid>
-                        <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
-                        <StackPanel Margin="0,0,14,0"><TextBlock Text="Aim Button" FontWeight="SemiBold"/><ComboBox x:Name="CmbAimButton" SelectionChanged="SettingChanged"/><TextBlock Text="Aim Mouse Key" FontWeight="SemiBold" Margin="0,10,0,0"/><ComboBox x:Name="CmbAimKey" SelectionChanged="SettingChanged"><ComboBoxItem Content="Right Mouse" Tag="2"/><ComboBoxItem Content="Middle Mouse" Tag="4"/><ComboBoxItem Content="Mouse 4" Tag="5"/><ComboBoxItem Content="Mouse 5" Tag="6"/></ComboBox></StackPanel>
-                        <StackPanel Grid.Column="1"><TextBlock Text="Fire Button" FontWeight="SemiBold"/><ComboBox x:Name="CmbFireButton" SelectionChanged="SettingChanged"/><Button Content="Replug Controller" Click="BtnReplug_Click" HorizontalAlignment="Left" Margin="0,12,0,0"/></StackPanel>
-                    </Grid></Border>
-                    <Border Style="{StaticResource Card}"><StackPanel>
-                        <CheckBox x:Name="ChkHold" Content="Hold To Aim" Click="SettingChanged"/>
-                        <CheckBox x:Name="ChkAlways" Content="Always Track" Click="SettingChanged"/>
-                        <TextBlock Text="Strength" FontWeight="SemiBold" Margin="0,8,0,0"/><Slider x:Name="SldStrength" Minimum="1" Maximum="10" ValueChanged="SettingChanged"/><TextBlock x:Name="TxtStrength" Foreground="{StaticResource MutedBrush}"/>
-                        <TextBlock Text="Aim Point Offset" FontWeight="SemiBold" Margin="0,8,0,0"/><Slider x:Name="SldOffset" Minimum="-100" Maximum="100" ValueChanged="SettingChanged"/><TextBlock x:Name="TxtOffset" Foreground="{StaticResource MutedBrush}"/>
-                    </StackPanel></Border>
-                    <Border Style="{StaticResource Card}"><StackPanel>
-                        <CheckBox x:Name="ChkRecoil" Content="Anti-Recoil" Click="SettingChanged"/>
-                        <StackPanel x:Name="RecoilRow"><TextBlock Text="Anti-Recoil Strength" FontWeight="SemiBold"/><Slider x:Name="SldRecoil" Minimum="0" Maximum="20" ValueChanged="SettingChanged"/><TextBlock x:Name="TxtRecoil" Foreground="{StaticResource MutedBrush}"/></StackPanel>
-                        <CheckBox x:Name="ChkAutoFire" Content="Auto Fire" Click="SettingChanged"/>
-                    </StackPanel></Border>
-                    <Border Style="{StaticResource Card}"><StackPanel><TextBlock Text="Controller Test" FontSize="17" FontWeight="SemiBold"/><TextBlock x:Name="TxtPad" Text="No controller data." FontFamily="Consolas" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" Margin="0,8,0,0"/></StackPanel></Border>
-                </StackPanel></ScrollViewer>
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <StackPanel Margin="0,0,0,14"><TextBlock Text="Game Control" FontSize="26" FontWeight="Bold"/><TextBlock Text="Aim and controller settings" Foreground="{StaticResource MutedBrush}"/></StackPanel>
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,12"><Button x:Name="GameBo7" Content="BO7" Tag="0" Click="GameTab_Click"/><Button x:Name="GameBo6" Content="BO6" Tag="1" Click="GameTab_Click"/><Button x:Name="GameMw" Content="MW" Tag="2" Click="GameTab_Click"/><Button x:Name="GameMw4" Content="MW4" Tag="3" Click="GameTab_Click"/></StackPanel>
+                <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                    <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="12"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <Border Style="{StaticResource CardStyle}"><StackPanel>
+                                <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <StackPanel><TextBlock Text="Controller" FontSize="16" FontWeight="SemiBold"/><TextBlock x:Name="TxtControllerConnection" Text="NOT CONNECTED" Foreground="{StaticResource DangerBrush}" Margin="0,4,0,0"/></StackPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal"><Button Content="Rescan" Click="BtnRescanController_Click" Padding="12,6"/><Button Content="Replug / Reconnect" Click="BtnReplug_Click" Padding="12,6"/></StackPanel>
+                                </Grid>
+                                <TextBlock Text="Device" Foreground="{StaticResource MutedBrush}" Margin="0,12,0,0"/><ComboBox x:Name="CmbDevice" SelectionChanged="SettingChanged"><ComboBoxItem Content="Mouse"/><ComboBoxItem Content="Controller"/></ComboBox>
+                                <TextBlock x:Name="TxtDeviceNote" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                            </StackPanel></Border>
+
+                            <Border Style="{StaticResource CardStyle}"><StackPanel>
+                                <TextBlock Text="Aim Controls" FontSize="16" FontWeight="SemiBold"/>
+                                <Grid Margin="0,10,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="10"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                    <StackPanel><TextBlock Text="Aim Button" Foreground="{StaticResource MutedBrush}"/><ComboBox x:Name="CmbAimButton" SelectionChanged="SettingChanged"/></StackPanel>
+                                    <StackPanel Grid.Column="2"><TextBlock Text="Fire Button" Foreground="{StaticResource MutedBrush}"/><ComboBox x:Name="CmbFireButton" SelectionChanged="SettingChanged"/></StackPanel>
+                                </Grid>
+                                <TextBlock Text="Aim Key" Foreground="{StaticResource MutedBrush}" Margin="0,8,0,0"/><ComboBox x:Name="CmbAimKey" SelectionChanged="SettingChanged"><ComboBoxItem Content="Right Mouse" Tag="2"/><ComboBoxItem Content="Middle Mouse" Tag="4"/><ComboBoxItem Content="Mouse 4" Tag="5"/><ComboBoxItem Content="Mouse 5" Tag="6"/></ComboBox>
+                                <CheckBox x:Name="ChkHold" Content="Hold To Aim" Click="SettingChanged"/><CheckBox x:Name="ChkAlways" Content="Always Track" Click="SettingChanged"/>
+                                <TextBlock Text="Strength" Foreground="{StaticResource MutedBrush}" Margin="0,8,0,0"/><Slider x:Name="SldStrength" Minimum="1" Maximum="10" ValueChanged="SettingChanged"/><TextBlock x:Name="TxtStrength" Foreground="{StaticResource MutedBrush}"/>
+                                <TextBlock Text="Aim Point Offset" Foreground="{StaticResource MutedBrush}" Margin="0,8,0,0"/><Slider x:Name="SldOffset" Minimum="-100" Maximum="100" ValueChanged="SettingChanged"/><TextBlock x:Name="TxtOffset" Foreground="{StaticResource MutedBrush}"/>
+                            </StackPanel></Border>
+
+                            <Border Style="{StaticResource CardStyle}"><StackPanel>
+                                <TextBlock Text="Fire &amp; Trigger" FontSize="16" FontWeight="SemiBold"/>
+                                <CheckBox x:Name="ChkRecoil" Content="Anti-Recoil" Click="SettingChanged"/>
+                                <StackPanel x:Name="RecoilRow"><TextBlock Text="Anti-Recoil Strength" Foreground="{StaticResource MutedBrush}"/><Slider x:Name="SldRecoil" Minimum="0" Maximum="20" ValueChanged="SettingChanged"/><TextBlock x:Name="TxtRecoil" Foreground="{StaticResource MutedBrush}"/></StackPanel>
+                                <CheckBox x:Name="ChkAutoFire" Content="Auto Fire" Click="SettingChanged"/>
+                                <TextBlock Text="Trigger Threshold" Foreground="{StaticResource MutedBrush}" Margin="0,8,0,0"/><Slider x:Name="SldTriggerThreshold" Minimum="1" Maximum="255" ValueChanged="SettingChanged"/><TextBlock x:Name="TxtTriggerThreshold" Foreground="{StaticResource MutedBrush}"/>
+                                <CheckBox x:Name="ChkSwapTriggers" Content="Swap Triggers" Click="SettingChanged"/>
+                            </StackPanel></Border>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2">
+                            <Border Style="{StaticResource CardStyle}"><StackPanel>
+                                <TextBlock Text="Controller Tester" FontSize="16" FontWeight="SemiBold"/><TextBlock Text="Buttons light up from the physical controller." Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,4,0,12"/>
+                                <UniformGrid Columns="4" Margin="0,0,0,10">
+                                    <Border x:Name="PadL1" Style="{StaticResource RaisedCardStyle}" Margin="2" Padding="8"><TextBlock Text="L1" HorizontalAlignment="Center"/></Border><Border x:Name="PadL2" Style="{StaticResource RaisedCardStyle}" Margin="2" Padding="8"><TextBlock Text="L2" HorizontalAlignment="Center"/></Border><Border x:Name="PadR1" Style="{StaticResource RaisedCardStyle}" Margin="2" Padding="8"><TextBlock Text="R1" HorizontalAlignment="Center"/></Border><Border x:Name="PadR2" Style="{StaticResource RaisedCardStyle}" Margin="2" Padding="8"><TextBlock Text="R2" HorizontalAlignment="Center"/></Border>
+                                    <Border x:Name="PadTriangle" Style="{StaticResource RaisedCardStyle}" Margin="2" Padding="8"><TextBlock Text="Triangle" HorizontalAlignment="Center"/></Border><Border x:Name="PadCircle" Style="{StaticResource RaisedCardStyle}" Margin="2" Padding="8"><TextBlock Text="Circle" HorizontalAlignment="Center"/></Border><Border x:Name="PadCross" Style="{StaticResource RaisedCardStyle}" Margin="2" Padding="8"><TextBlock Text="Cross" HorizontalAlignment="Center"/></Border><Border x:Name="PadSquare" Style="{StaticResource RaisedCardStyle}" Margin="2" Padding="8"><TextBlock Text="Square" HorizontalAlignment="Center"/></Border>
+                                    <Border x:Name="PadL3" Style="{StaticResource RaisedCardStyle}" Margin="2" Padding="8"><TextBlock Text="L3" HorizontalAlignment="Center"/></Border><Border x:Name="PadR3" Style="{StaticResource RaisedCardStyle}" Margin="2" Padding="8"><TextBlock Text="R3" HorizontalAlignment="Center"/></Border><Border x:Name="PadCreate" Style="{StaticResource RaisedCardStyle}" Margin="2" Padding="8"><TextBlock Text="Create" HorizontalAlignment="Center"/></Border><Border x:Name="PadOptions" Style="{StaticResource RaisedCardStyle}" Margin="2" Padding="8"><TextBlock Text="Options" HorizontalAlignment="Center"/></Border>
+                                </UniformGrid>
+                                <UniformGrid Columns="4" Margin="0,0,0,12"><Border x:Name="PadUp" Style="{StaticResource RaisedCardStyle}" Margin="2" Padding="8"><TextBlock Text="D-Up" HorizontalAlignment="Center"/></Border><Border x:Name="PadDown" Style="{StaticResource RaisedCardStyle}" Margin="2" Padding="8"><TextBlock Text="D-Down" HorizontalAlignment="Center"/></Border><Border x:Name="PadLeft" Style="{StaticResource RaisedCardStyle}" Margin="2" Padding="8"><TextBlock Text="D-Left" HorizontalAlignment="Center"/></Border><Border x:Name="PadRight" Style="{StaticResource RaisedCardStyle}" Margin="2" Padding="8"><TextBlock Text="D-Right" HorizontalAlignment="Center"/></Border></UniformGrid>
+                                <Border Style="{StaticResource RaisedCardStyle}" Margin="0,0,0,8" Padding="12"><StackPanel><TextBlock Text="Left Stick" Foreground="{StaticResource MutedBrush}"/><TextBlock x:Name="TxtLeftStick" Text="X 0  /  Y 0" FontFamily="Consolas" Margin="0,4,0,0"/></StackPanel></Border>
+                                <Border Style="{StaticResource RaisedCardStyle}" Margin="0,0,0,8" Padding="12"><StackPanel><TextBlock Text="Right Stick" Foreground="{StaticResource MutedBrush}"/><TextBlock x:Name="TxtRightStick" Text="X 0  /  Y 0" FontFamily="Consolas" Margin="0,4,0,0"/></StackPanel></Border>
+                                <Border Style="{StaticResource RaisedCardStyle}" Margin="0" Padding="12"><StackPanel><TextBlock Text="Triggers" Foreground="{StaticResource MutedBrush}"/><TextBlock x:Name="TxtTriggers" Text="L2 0%  /  R2 0%" FontFamily="Consolas" Margin="0,4,0,0"/></StackPanel></Border>
+                            </StackPanel></Border>
+                        </StackPanel>
+                    </Grid>
+                </ScrollViewer>
             </Grid>
 
-            <Grid x:Name="GuidePage" Visibility="Collapsed">
-                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                <StackPanel><TextBlock Text="Guide" FontSize="26" FontWeight="Bold"/><TextBlock Text="Game marker setup" Foreground="{StaticResource MutedBrush}"/></StackPanel>
-                <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,18,0,0"><StackPanel>
-                    <TabControl x:Name="GuideTabs" SelectionChanged="GuideTabs_SelectionChanged">
-                        <TabItem Header="BO7"><TextBlock Margin="14" Text="Open Interface → Readability → Color Customization. Set the Enemy marker color to #FF00FA, then keep the in-game enemy marker visible." TextWrapping="Wrap"/></TabItem>
-                        <TabItem Header="BO6"><TextBlock Margin="14" Text="Open Interface → Readability → Color Customization. Set the Enemy marker color to #FF00FA and keep Player Names / enemy indicators enabled." TextWrapping="Wrap"/></TabItem>
-                        <TabItem Header="MW"><TextBlock Margin="14" Text="Open Interface → Color Customization. Set Enemy to #FF00FA and keep enemy HUD markers enabled." TextWrapping="Wrap"/></TabItem>
-                        <TabItem Header="MW4"><TextBlock Margin="14" Text="Open Interface → Readability / HUD Colors. Set Enemy to #FF00FA and keep HUD bounds / markers enabled." TextWrapping="Wrap"/></TabItem>
-                    </TabControl>
-                    <TextBlock x:Name="TxtNote" Text="The detector uses the same fixed marker range as the reference application." Foreground="{StaticResource MutedBrush}" Margin="8,14,8,0" TextWrapping="Wrap"/>
-                </StackPanel></Border>
+            <Grid x:Name="GuidePage" Visibility="Collapsed"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <StackPanel Margin="0,0,0,14"><TextBlock Text="Guide" FontSize="26" FontWeight="Bold"/><TextBlock Text="Quick setup by game" Foreground="{StaticResource MutedBrush}"/></StackPanel>
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"><StackPanel><TabControl x:Name="GuideTabs" SelectionChanged="GuideTabs_SelectionChanged">
+                    <TabItem Header="BO7"><Border Style="{StaticResource CardStyle}" Margin="0,12,0,0"><StackPanel><TextBlock Text="BO7" FontSize="18" FontWeight="SemiBold"/><TextBlock Text="1. Enable the enemy/highlight color expected by your profile.&#10;2. Keep the selected capture region centered on the crosshair.&#10;3. Start Capture and confirm frames/FPS are moving.&#10;4. Check Target Status before enabling aim output." TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}" Margin="0,10,0,0" LineHeight="24"/></StackPanel></Border></TabItem>
+                    <TabItem Header="BO6"><Border Style="{StaticResource CardStyle}" Margin="0,12,0,0"><StackPanel><TextBlock Text="BO6" FontSize="18" FontWeight="SemiBold"/><TextBlock Text="Use the same capture flow: set the in-game marker/highlight, center the capture region, start capture, then confirm LIVE and Target Status." TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}" Margin="0,10,0,0" LineHeight="24"/></StackPanel></Border></TabItem>
+                    <TabItem Header="MW"><Border Style="{StaticResource CardStyle}" Margin="0,12,0,0"><StackPanel><TextBlock Text="MW" FontSize="18" FontWeight="SemiBold"/><TextBlock Text="Select the matching in-game color settings, verify the capture preview, and use Check if controller or drivers are not detected." TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}" Margin="0,10,0,0" LineHeight="24"/></StackPanel></Border></TabItem>
+                    <TabItem Header="MW4"><Border Style="{StaticResource CardStyle}" Margin="0,12,0,0"><StackPanel><TextBlock Text="MW4" FontSize="18" FontWeight="SemiBold"/><TextBlock Text="Keep the capture area centered and confirm Actual FPS is close to Target FPS before adjusting Strength or Offset." TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}" Margin="0,10,0,0" LineHeight="24"/></StackPanel></Border></TabItem>
+                </TabControl></StackPanel></ScrollViewer>
             </Grid>
 
-            <Grid x:Name="CheckPage" Visibility="Collapsed">
-                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                <StackPanel><TextBlock Text="Check" FontSize="26" FontWeight="Bold"/><TextBlock Text="System and controller checks" Foreground="{StaticResource MutedBrush}"/></StackPanel>
-                <ScrollViewer Grid.Row="1" Margin="0,18,0,0"><StackPanel>
-                    <Border Style="{StaticResource Card}"><StackPanel><TextBlock Text="System" FontSize="17" FontWeight="SemiBold"/><TextBlock x:Name="TxtCheckOs" Margin="0,10,0,0"/><TextBlock x:Name="TxtCheckRuntime" Margin="0,4,0,0"/><TextBlock x:Name="TxtCheckAdmin" Margin="0,4,0,0"/></StackPanel></Border>
-                    <Border Style="{StaticResource Card}"><StackPanel><TextBlock Text="Controller" FontSize="17" FontWeight="SemiBold"/><TextBlock x:Name="TxtCheckPad" Margin="0,10,0,0"/><TextBlock x:Name="TxtCheckVigem" Margin="0,4,0,0"/><Button Content="Run Check" Click="BtnCheck_Click" HorizontalAlignment="Left" Margin="0,12,0,0"/></StackPanel></Border>
-                    <Border Style="{StaticResource Card}"><StackPanel><TextBlock Text="Detection" FontSize="17" FontWeight="SemiBold"/><TextBlock Text="Expected marker: #FF00FA • HSV H 140–158, S ≥ 90, V ≥ 110" Foreground="{StaticResource MutedBrush}" Margin="0,8,0,0" TextWrapping="Wrap"/></StackPanel></Border>
+            <Grid x:Name="CheckPage" Visibility="Collapsed"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <Grid Margin="0,0,0,14"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel><TextBlock Text="Check" FontSize="26" FontWeight="Bold"/><TextBlock Text="System, capture and controller checks" Foreground="{StaticResource MutedBrush}"/></StackPanel><Button Grid.Column="1" Content="Rescan" Click="BtnCheck_Click"/></Grid>
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"><StackPanel>
+                    <Border Style="{StaticResource CardStyle}"><StackPanel><TextBlock Text="System" FontSize="16" FontWeight="SemiBold"/><TextBlock x:Name="TxtCheckOs" Margin="0,10,0,0"/><TextBlock x:Name="TxtCheckRuntime" Margin="0,5,0,0"/><TextBlock x:Name="TxtCheckOpenCv" Margin="0,5,0,0"/></StackPanel></Border>
+                    <Border Style="{StaticResource CardStyle}"><StackPanel><TextBlock Text="Capture" FontSize="16" FontWeight="SemiBold"/><TextBlock x:Name="TxtCheckMonitors" Margin="0,10,0,0"/><TextBlock x:Name="TxtCheckCapture" Margin="0,5,0,0"/></StackPanel></Border>
+                    <Border Style="{StaticResource CardStyle}"><StackPanel><TextBlock Text="Controller &amp; Drivers" FontSize="16" FontWeight="SemiBold"/><TextBlock x:Name="TxtCheckPad" Margin="0,10,0,0"/><TextBlock x:Name="TxtCheckVigem" Margin="0,5,0,0"/><TextBlock x:Name="TxtCheckHidHide" Margin="0,5,0,0"/><StackPanel Orientation="Horizontal" Margin="0,10,0,0"><Button Content="Install ViGEm" Click="BtnInstallVigem_Click"/><Button Content="Install HidHide" Click="BtnInstallHidHide_Click"/></StackPanel></StackPanel></Border>
+                    <Border Style="{StaticResource CardStyle}"><StackPanel><TextBlock Text="Detection" FontSize="16" FontWeight="SemiBold"/><TextBlock Text="Expected marker: #FF00FA • HSV H 140–158, S ≥ 90, V ≥ 110" Foreground="{StaticResource MutedBrush}" Margin="0,8,0,0" TextWrapping="Wrap"/></StackPanel></Border>
                 </StackPanel></ScrollViewer>
             </Grid>
         </Grid>
