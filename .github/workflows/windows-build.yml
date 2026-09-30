@@ -35,36 +35,75 @@ jobs:
           if ($files.Count -ne 1) { throw "Expected one file, found $($files.Count)" }
           if ($files[0].Name -ne 'MohammedLab-PC.exe') { throw "Unexpected output: $($files[0].Name)" }
 
-      - name: Runtime smoke test
+      - name: Runtime UI capture smoke test
         shell: pwsh
         run: |
-          $exe = (Resolve-Path 'dist/OneClick/MohammedLab-PC.exe').Path
-          $p = Start-Process -FilePath $exe -PassThru
-          Start-Sleep -Seconds 7
-          $p.Refresh()
-          if ($p.HasExited) {
-            throw "MohammedLab-PC.exe exited during smoke test. Exit code: $($p.ExitCode)"
-          }
-          Write-Host "Runtime smoke test passed. PID=$($p.Id)"
-          Stop-Process -Id $p.Id -Force
-
-      - name: Try UI screenshot
-        shell: pwsh
-        continue-on-error: true
-        run: |
+          Add-Type -AssemblyName UIAutomationClient
+          Add-Type -AssemblyName UIAutomationTypes
           Add-Type -AssemblyName System.Windows.Forms
           Add-Type -AssemblyName System.Drawing
+
+          function Find-ByName($root, $name) {
+            $condition = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, $name)
+            return $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
+          }
+
+          function Invoke-Element($element) {
+            if ($null -eq $element) { throw 'UI element not found' }
+            $pattern = $element.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
+            $pattern.Invoke()
+          }
+
           $exe = (Resolve-Path 'dist/OneClick/MohammedLab-PC.exe').Path
           $p = Start-Process -FilePath $exe -PassThru
-          Start-Sleep -Seconds 5
-          $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-          $bmp = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
-          $g = [System.Drawing.Graphics]::FromImage($bmp)
-          $g.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
-          New-Item -ItemType Directory -Force -Path dist/smoke | Out-Null
-          $bmp.Save((Join-Path $PWD 'dist/smoke/ui.png'), [System.Drawing.Imaging.ImageFormat]::Png)
-          $g.Dispose(); $bmp.Dispose()
-          if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+          try {
+            $deadline = (Get-Date).AddSeconds(15)
+            do {
+              Start-Sleep -Milliseconds 300
+              $p.Refresh()
+              if ($p.HasExited) { throw "App exited before UI smoke test. Exit code: $($p.ExitCode)" }
+            } until ($p.MainWindowHandle -ne 0 -or (Get-Date) -gt $deadline)
+
+            if ($p.MainWindowHandle -eq 0) { throw 'Main window did not appear' }
+            $root = [System.Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)
+
+            $start = Find-ByName $root 'START CAPTURE'
+            Invoke-Element $start
+
+            $deadline = (Get-Date).AddSeconds(12)
+            $capturing = $null
+            do {
+              Start-Sleep -Milliseconds 500
+              $p.Refresh()
+              if ($p.HasExited) { throw "App exited after START CAPTURE. Exit code: $($p.ExitCode)" }
+              $root = [System.Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)
+              $capturing = Find-ByName $root 'CAPTURING'
+            } until ($null -ne $capturing -or (Get-Date) -gt $deadline)
+
+            if ($null -eq $capturing) { throw 'CAPTURING state did not appear after START CAPTURE' }
+            Write-Host 'START CAPTURE passed and CAPTURING state is visible.'
+
+            New-Item -ItemType Directory -Force -Path dist/smoke | Out-Null
+            $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $bmp = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+            $bmp.Save((Join-Path $PWD 'dist/smoke/capturing.png'), [System.Drawing.Imaging.ImageFormat]::Png)
+            $g.Dispose(); $bmp.Dispose()
+
+            $root = [System.Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)
+            $stop = Find-ByName $root 'STOP CAPTURE'
+            Invoke-Element $stop
+            Start-Sleep -Seconds 2
+            $root = [System.Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)
+            $stopped = Find-ByName $root 'CAPTURE STOPPED'
+            if ($null -eq $stopped) { throw 'CAPTURE STOPPED state did not appear after STOP CAPTURE' }
+            Write-Host 'STOP CAPTURE passed and CAPTURE STOPPED state is visible.'
+          }
+          finally {
+            $p.Refresh()
+            if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+          }
 
       - uses: actions/upload-artifact@v4
         with:
@@ -76,5 +115,5 @@ jobs:
         if: always()
         with:
           name: MohammedLab-PC-UI-Smoke
-          path: dist/smoke/ui.png
+          path: dist/smoke/capturing.png
           if-no-files-found: ignore
