@@ -10,27 +10,71 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+
       - name: Restore
         run: dotnet restore
+
       - name: Build
         run: dotnet build -c Release --no-restore
+
       - name: Publish one-click Windows x64
         shell: pwsh
         run: |
-          dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishReadyToRun=true -p:DebugType=None -p:DebugSymbols=false -o dist/publish
+          dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o dist/publish
           New-Item -ItemType Directory -Force -Path dist/OneClick | Out-Null
           Copy-Item dist/publish/MohammedLab-PC.exe dist/OneClick/MohammedLab-PC.exe
+
       - name: Verify artifact
         shell: pwsh
         run: |
           $files = Get-ChildItem dist/OneClick -File
           if ($files.Count -ne 1) { throw "Expected one file, found $($files.Count)" }
           if ($files[0].Name -ne 'MohammedLab-PC.exe') { throw "Unexpected output: $($files[0].Name)" }
+
+      - name: Runtime smoke test
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path 'dist/OneClick/MohammedLab-PC.exe').Path
+          $p = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 7
+          $p.Refresh()
+          if ($p.HasExited) {
+            throw "MohammedLab-PC.exe exited during smoke test. Exit code: $($p.ExitCode)"
+          }
+          Write-Host "Runtime smoke test passed. PID=$($p.Id)"
+          Stop-Process -Id $p.Id -Force
+
+      - name: Try UI screenshot
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms
+          Add-Type -AssemblyName System.Drawing
+          $exe = (Resolve-Path 'dist/OneClick/MohammedLab-PC.exe').Path
+          $p = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 5
+          $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bmp = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
+          $g = [System.Drawing.Graphics]::FromImage($bmp)
+          $g.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+          New-Item -ItemType Directory -Force -Path dist/smoke | Out-Null
+          $bmp.Save((Join-Path $PWD 'dist/smoke/ui.png'), [System.Drawing.Imaging.ImageFormat]::Png)
+          $g.Dispose(); $bmp.Dispose()
+          if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+
       - uses: actions/upload-artifact@v4
         with:
           name: MohammedLab-PC-OneClick-win-x64
           path: dist/OneClick/MohammedLab-PC.exe
           if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: MohammedLab-PC-UI-Smoke
+          path: dist/smoke/ui.png
+          if-no-files-found: ignore
