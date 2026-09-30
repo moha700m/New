@@ -1,0 +1,36 @@
+name: Windows Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Restore
+        run: dotnet restore
+      - name: Build
+        run: dotnet build -c Release --no-restore
+      - name: Publish one-click Windows x64
+        shell: pwsh
+        run: |
+          dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishReadyToRun=true -p:DebugType=None -p:DebugSymbols=false -o dist/publish
+          New-Item -ItemType Directory -Force -Path dist/OneClick | Out-Null
+          Copy-Item dist/publish/MohammedLab-PC.exe dist/OneClick/MohammedLab-PC.exe
+      - name: Verify artifact
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem dist/OneClick -File
+          if ($files.Count -ne 1) { throw "Expected one file, found $($files.Count)" }
+          if ($files[0].Name -ne 'MohammedLab-PC.exe') { throw "Unexpected output: $($files[0].Name)" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MohammedLab-PC-OneClick-win-x64
+          path: dist/OneClick/MohammedLab-PC.exe
+          if-no-files-found: error
