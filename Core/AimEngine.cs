@@ -24,8 +24,8 @@ public sealed class AimEngine : IDisposable
     public DateTime LastFrameUtc { get; private set; }
     public DetectionResult LastDetection { get; private set; }
     public XInput.State LastControllerState { get; private set; }
-    public string VirtualControllerStatus => _virtual.Status;
-    public void ReplugController() => _virtual.Replug();
+    public string VirtualControllerStatus => "Not used • direct physical input";
+    public void ReplugController() => XInput.RescanController();
 
     public event Action? TelemetryUpdated;
     public event Action<string>? Faulted;
@@ -37,11 +37,10 @@ public sealed class AimEngine : IDisposable
     public bool Start()
     {
         if (Running) return true;
-        if (Config.Device == AimDevice.Controller && !_virtual.Connect())
-        {
-            Faulted?.Invoke(_virtual.Status);
-            return false;
-        }
+
+        // The current detector is visual-only. Physical DualSense/XInput is read directly;
+        // do not create a ViGEm Xbox device just to start capture.
+        _virtual.Disconnect();
 
         Interlocked.Exchange(ref _frames, 0);
         Interlocked.Exchange(ref _droppedFrames, 0);
@@ -85,7 +84,6 @@ public sealed class AimEngine : IDisposable
                 LastDetection = _detector.Detect(bitmap, cfg);
                 XInput.TryGetState(0, out var state);
                 LastControllerState = state;
-                ApplyVisualOnlyPassThrough(cfg, state);
 
                 Interlocked.Increment(ref _frames);
                 LastFrameUtc = DateTime.UtcNow;
@@ -133,14 +131,6 @@ public sealed class AimEngine : IDisposable
         catch { }
 
         PreviewFrameReady.Invoke(clone);
-    }
-
-    private void ApplyVisualOnlyPassThrough(AppConfig cfg, XInput.State state)
-    {
-        // Preserve ordinary controller passthrough while keeping the new player detector
-        // strictly visual. Mouse mode intentionally injects no movement/clicks here.
-        if (cfg.Device != AimDevice.Controller || !_virtual.Connected) return;
-        _virtual.Submit(state.Gamepad, 0, 0, autoFire: false, swapTriggers: cfg.SwapTriggers);
     }
 
     private void UpdateFps()
