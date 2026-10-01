@@ -17,6 +17,13 @@ public static class MouseInjector
     public static void LeftUp() => mouse_event(LEFTUP, 0, 0, 0, UIntPtr.Zero);
 }
 
+public enum PhysicalControllerSource
+{
+    None,
+    DualSenseUsb,
+    XInput
+}
+
 public static class XInput
 {
     [Flags]
@@ -50,7 +57,12 @@ public static class XInput
     private static extern uint GetStateNative(uint dwUserIndex, out State pState);
 
     private static readonly DualSenseUsbReader DualSense = new();
+
     public static string ControllerName { get; private set; } = "None";
+    public static PhysicalControllerSource ControllerSource { get; private set; } = PhysicalControllerSource.None;
+    public static bool DualSenseUsbPresent => DualSense.IsPresent;
+    public static bool DualSenseUsbConnected => DualSense.IsConnected;
+    public static string DualSenseStatus => DualSense.Status;
 
     static XInput()
     {
@@ -59,19 +71,31 @@ public static class XInput
 
     public static bool TryGetState(int index, out State state)
     {
-        // Prefer the real PS5 DualSense over XInput. This also prevents the app
-        // from accidentally reading its own ViGEm virtual Xbox controller.
+        // A real DualSense connected by USB is always preferred over XInput.
+        // This keeps the UI from mistaking our ViGEm virtual Xbox device for the physical pad.
         if (DualSense.TryGetState(out state))
         {
             ControllerName = "DualSense (USB)";
+            ControllerSource = PhysicalControllerSource.DualSenseUsb;
             return true;
+        }
+
+        // If Windows can see a DualSense USB device but HID access is not ready/available,
+        // do not silently fall through to a virtual XInput device and call it the user's pad.
+        if (DualSense.IsPresent)
+        {
+            state = default;
+            ControllerName = "DualSense (USB)";
+            ControllerSource = PhysicalControllerSource.DualSenseUsb;
+            return false;
         }
 
         try
         {
             if (GetStateNative((uint)Math.Clamp(index, 0, 3), out state) == 0)
             {
-                ControllerName = "XInput Controller";
+                ControllerName = "Xbox / XInput Controller";
+                ControllerSource = PhysicalControllerSource.XInput;
                 return true;
             }
         }
@@ -80,10 +104,18 @@ public static class XInput
 
         state = default;
         ControllerName = "None";
+        ControllerSource = PhysicalControllerSource.None;
         return false;
     }
 
-    public static void RescanController() => DualSense.Rescan();
+    public static bool TryGetDualSenseState(out State state) => DualSense.TryGetState(out state);
+
+    public static void RescanController()
+    {
+        ControllerName = "Scanning…";
+        ControllerSource = PhysicalControllerSource.None;
+        DualSense.Rescan();
+    }
 
     private sealed class DualSenseUsbReader : IDisposable
     {
@@ -99,7 +131,16 @@ public static class XInput
         private DateTime _lastReportUtc;
         private uint _packetNumber;
         private volatile bool _connected;
+        private volatile bool _present;
         private volatile bool _rescanRequested;
+        private string _status = "Not detected";
+
+        public bool IsPresent => _present;
+        public bool IsConnected => _connected;
+        public string Status
+        {
+            get { lock (_sync) return _status; }
+        }
 
         public DualSenseUsbReader()
         {
@@ -110,7 +151,9 @@ public static class XInput
         {
             lock (_sync)
             {
-                if (_connected && _lastReportUtc != default && (DateTime.UtcNow - _lastReportUtc).TotalSeconds < 2)
+                // Opening the correct HID interface is sufficient to establish a physical USB
+                // connection. Fresh reports replace the neutral initial state as they arrive.
+                if (_connected)
                 {
                     state = _latestState;
                     return true;
@@ -121,7 +164,11 @@ public static class XInput
             return false;
         }
 
-        public void Rescan() => _rescanRequested = true;
+        public void Rescan()
+        {
+            _rescanRequested = true;
+            try { _stream?.Dispose(); } catch { }
+        }
 
         private async Task ReaderLoopAsync(CancellationToken token)
         {
@@ -132,16 +179,26 @@ public static class XInput
                 {
                     if (!TryOpenDualSense(out var device, out stream) || stream is null)
                     {
-                        SetDisconnected();
-                        await Task.Delay(700, token).ConfigureAwait(false);
+                        SetDisconnected(_present ? "DualSense USB detected, HID access unavailable" : "Not detected");
+                        await Task.Delay(500, token).ConfigureAwait(false);
                         continue;
                     }
 
                     _stream = stream;
                     _rescanRequested = false;
                     stream.ReadTimeout = 500;
-                    var buffer = new byte[Math.Max(64, device.GetMaxInputReportLength())];
 
+                    lock (_sync)
+                    {
+                        _connected = true;
+                        _latestState = default;
+                        _lastReportUtc = DateTime.UtcNow;
+                        _status = device.ProductID == DualSenseEdgeProductId
+                            ? "DualSense Edge (USB) • Connected"
+                            : "DualSense (USB) • Connected";
+                    }
+
+                    var buffer = new byte[Math.Max(64, device.GetMaxInputReportLength())];
                     while (!token.IsCancellationRequested && !_rescanRequested)
                     {
                         int count;
@@ -151,15 +208,26 @@ public static class XInput
                         }
                         catch (TimeoutException)
                         {
+                            // The device is still physically connected even if a report did not
+                            // arrive during this short interval.
                             continue;
                         }
+                        catch (ObjectDisposedException) when (_rescanRequested)
+                        {
+                            break;
+                        }
 
-                        if (count < 11 || buffer[0] != 0x01) continue;
+                        if (count < 10) continue;
+
+                        // HidSharp normally includes the USB report id (0x01) at byte 0.
+                        // Some HID paths can expose the payload without it, so support both layouts.
+                        var payloadOffset = buffer[0] == 0x01 ? 1 : 0;
+                        if (count < payloadOffset + 10) continue;
 
                         var state = new State
                         {
                             dwPacketNumber = ++_packetNumber,
-                            Gamepad = ParseUsbReport(buffer)
+                            Gamepad = ParseUsbReport(buffer, payloadOffset)
                         };
 
                         lock (_sync)
@@ -167,38 +235,61 @@ public static class XInput
                             _latestState = state;
                             _lastReportUtc = DateTime.UtcNow;
                             _connected = true;
+                            _status = device.ProductID == DualSenseEdgeProductId
+                                ? "DualSense Edge (USB) • Connected"
+                                : "DualSense (USB) • Connected";
                         }
                     }
                 }
                 catch (OperationCanceledException) { }
-                catch
+                catch (Exception ex)
                 {
-                    SetDisconnected();
+                    SetDisconnected(_present ? "DualSense USB detected: " + ex.Message : "Not detected");
                 }
                 finally
                 {
                     try { stream?.Dispose(); } catch { }
                     if (ReferenceEquals(_stream, stream)) _stream = null;
-                    SetDisconnected();
+                    if (!_rescanRequested) SetDisconnected(_present ? "DualSense USB disconnected" : "Not detected");
                 }
 
                 if (!token.IsCancellationRequested)
                 {
-                    try { await Task.Delay(250, token).ConfigureAwait(false); }
+                    try { await Task.Delay(150, token).ConfigureAwait(false); }
                     catch (OperationCanceledException) { }
                 }
             }
         }
 
-        private static bool TryOpenDualSense(out HidDevice device, out HidStream? stream)
+        private bool TryOpenDualSense(out HidDevice device, out HidStream? stream)
         {
-            foreach (var candidate in DeviceList.Local.GetHidDevices(SonyVendorId))
+            device = null!;
+            stream = null;
+
+            HidDevice[] candidates;
+            try
             {
-                if (candidate.ProductID != DualSenseProductId && candidate.ProductID != DualSenseEdgeProductId) continue;
+                candidates = DeviceList.Local.GetHidDevices(SonyVendorId)
+                    .Where(x => x.ProductID == DualSenseProductId || x.ProductID == DualSenseEdgeProductId)
+                    .OrderByDescending(x => SafeInputReportLength(x))
+                    .ToArray();
+            }
+            catch
+            {
+                _present = false;
+                return false;
+            }
+
+            _present = candidates.Length > 0;
+            if (!_present) return false;
+
+            foreach (var candidate in candidates)
+            {
                 try
                 {
-                    // Native DualSense USB input report 0x01 is 64 bytes including report ID.
-                    if (candidate.GetMaxInputReportLength() < 64) continue;
+                    // The normal DualSense USB gamepad interface exposes a large input report.
+                    // Skip tiny auxiliary HID collections such as feature-only interfaces.
+                    if (SafeInputReportLength(candidate) < 48) continue;
                     if (!candidate.TryOpen(out var opened) || opened is null) continue;
                     device = candidate;
                     stream = opened;
@@ -207,17 +298,21 @@ public static class XInput
                 catch { }
             }
 
-            device = null!;
-            stream = null;
             return false;
         }
 
-        private static Gamepad ParseUsbReport(byte[] data)
+        private static int SafeInputReportLength(HidDevice device)
         {
-            // DualSense USB report 0x01:
-            // 1 LX, 2 LY, 3 RX, 4 RY, 5 L2, 6 R2, 7 seq, 8-10 buttons.
-            var buttons0 = data[8];
-            var buttons1 = data[9];
+            try { return device.GetMaxInputReportLength(); }
+            catch { return 0; }
+        }
+
+        private static Gamepad ParseUsbReport(byte[] data, int o)
+        {
+            // Payload layout after optional report ID:
+            // LX, LY, RX, RY, L2, R2, sequence, buttons0, buttons1, buttons2...
+            var buttons0 = data[o + 7];
+            var buttons1 = data[o + 8];
             var buttons = (Buttons)0;
             var hat = buttons0 & 0x0F;
 
@@ -240,12 +335,12 @@ public static class XInput
             return new Gamepad
             {
                 wButtons = buttons,
-                bLeftTrigger = data[5],
-                bRightTrigger = data[6],
-                sThumbLX = ToAxis(data[1], invert: false),
-                sThumbLY = ToAxis(data[2], invert: true),
-                sThumbRX = ToAxis(data[3], invert: false),
-                sThumbRY = ToAxis(data[4], invert: true)
+                bLeftTrigger = data[o + 4],
+                bRightTrigger = data[o + 5],
+                sThumbLX = ToAxis(data[o + 0], invert: false),
+                sThumbLY = ToAxis(data[o + 1], invert: true),
+                sThumbRX = ToAxis(data[o + 2], invert: false),
+                sThumbRY = ToAxis(data[o + 3], invert: true)
             };
         }
 
@@ -256,12 +351,13 @@ public static class XInput
             return (short)Math.Clamp(centered * 256, short.MinValue, short.MaxValue);
         }
 
-        private void SetDisconnected()
+        private void SetDisconnected(string status)
         {
             lock (_sync)
             {
                 _connected = false;
                 _lastReportUtc = default;
+                _status = status;
             }
         }
 
