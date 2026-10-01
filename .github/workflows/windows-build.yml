@@ -3,7 +3,7 @@ name: Windows Build
 on:
   workflow_dispatch:
   push:
-    branches: [ main, fix/player-purple-visual-filter ]
+    branches: [ main ]
 
 jobs:
   build:
