@@ -3,8 +3,10 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Color Training Lab — Mohammed Lab PC"
         Width="560" Height="690" MinWidth="520" MinHeight="620"
-        WindowStartupLocation="CenterOwner" ResizeMode="CanResizeWithGrip">
-    <Grid Margin="20">
+        WindowStartupLocation="CenterOwner" ResizeMode="CanResizeWithGrip"
+        Background="{StaticResource Brush.Window}"
+        Foreground="{StaticResource Brush.Text.Primary}">
+    <Grid Margin="20" Background="{StaticResource Brush.Window}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -12,13 +14,13 @@
         </Grid.RowDefinitions>
 
         <StackPanel Margin="0,0,0,16">
-            <TextBlock Text="Color Training Lab" FontSize="24" FontWeight="SemiBold"/>
+            <TextBlock Text="Color Training Lab" FontSize="24" FontWeight="SemiBold" Foreground="{StaticResource Brush.Text.Primary}"/>
             <TextBlock Text="Visual / Offline Training" Foreground="{StaticResource Brush.Accent}" FontWeight="SemiBold" Margin="0,4,0,0"/>
             <TextBlock Text="Tunes what the preview and HUD consider a player-shaped color marker. It does not move aim, fire, or create a virtual controller."
                        Foreground="{StaticResource Brush.Text.Secondary}" TextWrapping="Wrap" Margin="0,7,0,0"/>
         </StackPanel>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Background="{StaticResource Brush.Window}">
             <StackPanel>
                 <Border Style="{StaticResource CardStyle}" Margin="0,0,0,12">
                     <StackPanel>
@@ -104,7 +106,7 @@
             </StackPanel>
         </ScrollViewer>
 
-        <Grid Grid.Row="2" Margin="0,16,0,0">
+        <Grid Grid.Row="2" Margin="0,16,0,0" Background="{StaticResource Brush.Window}">
             <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <Button Content="Reset defaults" Click="Reset_Click" HorizontalAlignment="Left"/>
             <Button Grid.Column="1" Content="Close" Click="Close_Click"/>
