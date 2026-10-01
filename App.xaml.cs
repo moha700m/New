@@ -6,6 +6,7 @@ namespace MohammedLab.ColorVision;
 public partial class App : System.Windows.Application
 {
     private readonly DispatcherTimer _controllerUiTimer;
+    private bool _trainingLabUiInstalled;
 
     public App()
     {
@@ -19,6 +20,12 @@ public partial class App : System.Windows.Application
         {
             var connected = XInput.TryGetState(0, out _);
             ControllerUiStatus.Post(connected);
+
+            if (!_trainingLabUiInstalled && this.MainWindow is MohammedLab.ColorVision.MainWindow main && main.IsLoaded)
+            {
+                main.InstallTrainingLabUi();
+                _trainingLabUiInstalled = true;
+            }
         };
         _controllerUiTimer.Start();
     }
