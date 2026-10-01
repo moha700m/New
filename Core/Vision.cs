@@ -61,32 +61,40 @@ public sealed class ScreenCapture : IDisposable
 public readonly record struct DisposeResult(bool Ready, string Message);
 
 /// <summary>
-/// Visual-only purple player-shape detector for preview/HUD feedback.
-/// It deliberately requires player-like geometry and short temporal stability instead of
-/// treating every purple pixel/contour as a target.
+/// Visual-only player-shape color detector for preview/HUD feedback.
+/// It deliberately requires player-like geometry, an adjustable visual FOV, confidence,
+/// and temporal stability instead of treating every matching pixel/contour as a target.
 /// </summary>
 public sealed class ColorDetector
 {
-    private static readonly Scalar Lower = new(140, 90, 110);
-    private static readonly Scalar Upper = new(158, 255, 255);
-
     private OpenCvSharp.Rect? _lastCandidate;
     private int _stableFrames;
     private int _missedFrames;
+    private MarkerPreset _lastPreset = MarkerPreset.Purple;
 
     public DetectionResult Detect(Bitmap bitmap, AppConfig cfg)
     {
+        if (_lastPreset != cfg.MarkerPreset)
+        {
+            _lastPreset = cfg.MarkerPreset;
+            _lastCandidate = null;
+            _stableFrames = 0;
+            _missedFrames = 0;
+        }
+
         var sw = Stopwatch.StartNew();
         using var mat = BitmapConverter.ToMat(bitmap);
         using var hsv = new Mat();
         Cv2.CvtColor(mat, hsv, ColorConversionCodes.BGR2HSV);
 
-        // Raw purple mask. Keep this untouched so density/band checks use real pixels,
+        var (lower, upper) = GetHsvRange(cfg.MarkerPreset);
+
+        // Raw color mask. Keep this untouched so density/band checks use real pixels,
         // not morphology-expanded pixels.
         using var rawMask = new Mat();
-        Cv2.InRange(hsv, Lower, Upper, rawMask);
+        Cv2.InRange(hsv, lower, upper, rawMask);
 
-        // Join small gaps in a purple player outline, then remove isolated specks.
+        // Join small gaps in a player outline, then remove isolated specks.
         using var merged = new Mat();
         using var cleaned = new Mat();
         using var closeKernel = Cv2.GetStructuringElement(MorphShapes.Rect, new OpenCvSharp.Size(5, 9));
@@ -103,7 +111,7 @@ public sealed class ColorDetector
         var borderMargin = 2;
         var cx = bitmap.Width / 2.0;
         var cy = bitmap.Height / 2.0;
-        var maxCenterDistance = Math.Sqrt(cx * cx + cy * cy);
+        var fovRadius = Math.Clamp(cfg.FovRadiusPx, 40, Math.Max(40, Math.Min(bitmap.Width, bitmap.Height) / 2));
 
         OpenCvSharp.Rect? bestRect = null;
         double bestScore = double.MinValue;
@@ -123,38 +131,43 @@ public sealed class ColorDetector
             var aspect = r.Height / (double)Math.Max(1, r.Width);
             if (aspect < 0.80 || aspect > 5.5) continue;
 
-            // Purple UI borders and screen-edge effects are common false positives.
+            // UI borders and screen-edge effects are common false positives.
             if (r.X <= borderMargin || r.Y <= borderMargin ||
                 r.Right >= bitmap.Width - borderMargin || r.Bottom >= bitmap.Height - borderMargin)
                 continue;
 
+            var rcx = r.X + r.Width / 2.0;
+            var rcy = r.Y + r.Height / 2.0;
+            var dx = rcx - cx;
+            var dy = rcy - cy;
+            var centerDistance = Math.Sqrt(dx * dx + dy * dy);
+
+            // FOV is strictly a visual detector filter. Anything outside the circle is ignored.
+            if (centerDistance > fovRadius) continue;
+
             using var rawRoi = new Mat(rawMask, r);
-            var purplePixels = Cv2.CountNonZero(rawRoi);
+            var coloredPixels = Cv2.CountNonZero(rawRoi);
             var boxArea = Math.Max(1, r.Width * r.Height);
-            var density = purplePixels / (double)boxArea;
+            var density = coloredPixels / (double)boxArea;
 
             // Thin player outlines can have low fill density; solid UI blocks tend to be high.
-            if (purplePixels < 14 || density < 0.018 || density > 0.62) continue;
+            if (coloredPixels < 14 || density < 0.018 || density > 0.62) continue;
 
-            // Require purple evidence across at least two vertical body zones. This rejects
+            // Require color evidence across at least two vertical body zones. This rejects
             // small labels/icons that happen to have a player-like bounding box.
             var occupiedBands = CountOccupiedVerticalBands(rawMask, r);
             if (occupiedBands < 2) continue;
 
             candidateCount++;
 
-            var rcx = r.X + r.Width / 2.0;
-            var rcy = r.Y + r.Height / 2.0;
-            var dx = rcx - cx;
-            var dy = rcy - cy;
-            var centerScore = 1.0 - Math.Clamp(Math.Sqrt(dx * dx + dy * dy) / Math.Max(1.0, maxCenterDistance), 0, 1);
+            var centerScore = 1.0 - Math.Clamp(centerDistance / Math.Max(1.0, fovRadius), 0, 1);
             var heightScore = Math.Clamp(r.Height / (bitmap.Height * 0.36), 0, 1);
             var aspectScore = 1.0 - Math.Clamp(Math.Abs(aspect - 2.0) / 2.5, 0, 1);
             var densityScore = 1.0 - Math.Clamp(Math.Abs(density - 0.16) / 0.30, 0, 1);
             var bandScore = occupiedBands / 3.0;
 
             // Geometry is weighted above center proximity so a player-shaped region beats
-            // a random purple object merely because it is closer to the crosshair.
+            // a random colored object merely because it is closer to the crosshair.
             var score =
                 centerScore * 0.20 +
                 heightScore * 0.25 +
@@ -183,13 +196,14 @@ public sealed class ColorDetector
         _missedFrames = 0;
         var selected = bestRect.Value;
         if (_lastCandidate is { } previous && IsSameTrack(previous, selected))
-            _stableFrames = Math.Min(_stableFrames + 1, 8);
+            _stableFrames = Math.Min(_stableFrames + 1, 12);
         else
             _stableFrames = 1;
         _lastCandidate = selected;
 
-        // A single-frame flash is not considered a confirmed player.
-        if (_stableFrames < 2)
+        // A short flash is not considered a confirmed player unless the user explicitly
+        // lowers the stability requirement in the visual training lab.
+        if (_stableFrames < cfg.StableFramesRequired)
         {
             sw.Stop();
             return DetectionResult.None(sw.Elapsed.TotalMilliseconds) with { CandidateCount = candidateCount };
@@ -200,6 +214,12 @@ public sealed class ColorDetector
         var stability = Math.Clamp(_stableFrames / 4.0, 0, 1);
         var confidence = Math.Clamp(bestScore * (0.70 + stability * 0.30), 0, 1);
 
+        if (confidence < cfg.MinConfidence)
+        {
+            sw.Stop();
+            return DetectionResult.None(sw.Elapsed.TotalMilliseconds) with { CandidateCount = candidateCount };
+        }
+
         sw.Stop();
         return new DetectionResult(
             true,
@@ -209,6 +229,25 @@ public sealed class ColorDetector
             candidateCount,
             sw.Elapsed.TotalMilliseconds);
     }
+
+    public static string MarkerLabel(MarkerPreset preset) => preset switch
+    {
+        MarkerPreset.Purple => "Purple",
+        MarkerPreset.Magenta => "Magenta",
+        MarkerPreset.Cyan => "Cyan",
+        MarkerPreset.Red => "Red",
+        MarkerPreset.Yellow => "Yellow",
+        _ => "Purple"
+    };
+
+    private static (Scalar Lower, Scalar Upper) GetHsvRange(MarkerPreset preset) => preset switch
+    {
+        MarkerPreset.Magenta => (new Scalar(158, 90, 110), new Scalar(179, 255, 255)),
+        MarkerPreset.Cyan => (new Scalar(84, 80, 100), new Scalar(105, 255, 255)),
+        MarkerPreset.Red => (new Scalar(0, 100, 100), new Scalar(10, 255, 255)),
+        MarkerPreset.Yellow => (new Scalar(20, 90, 110), new Scalar(38, 255, 255)),
+        _ => (new Scalar(140, 90, 110), new Scalar(158, 255, 255))
+    };
 
     private static int CountOccupiedVerticalBands(Mat rawMask, OpenCvSharp.Rect r)
     {

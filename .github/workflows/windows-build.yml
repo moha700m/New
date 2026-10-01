@@ -54,6 +54,15 @@ jobs:
             $pattern.Invoke()
           }
 
+          function Save-Screen($path) {
+            $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $bmp = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+            $bmp.Save((Join-Path $PWD $path), [System.Drawing.Imaging.ImageFormat]::Png)
+            $g.Dispose(); $bmp.Dispose()
+          }
+
           $exe = (Resolve-Path 'dist/OneClick/MohammedLab-PC.exe').Path
           $p = Start-Process -FilePath $exe -PassThru
           try {
@@ -84,12 +93,7 @@ jobs:
             Write-Host 'START CAPTURE passed and CAPTURING state is visible.'
 
             New-Item -ItemType Directory -Force -Path dist/smoke | Out-Null
-            $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-            $bmp = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
-            $g = [System.Drawing.Graphics]::FromImage($bmp)
-            $g.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
-            $bmp.Save((Join-Path $PWD 'dist/smoke/capturing.png'), [System.Drawing.Imaging.ImageFormat]::Png)
-            $g.Dispose(); $bmp.Dispose()
+            Save-Screen 'dist/smoke/capturing.png'
 
             $root = [System.Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)
             $stop = Find-ByName $root 'STOP CAPTURE'
@@ -99,6 +103,17 @@ jobs:
             $stopped = Find-ByName $root 'CAPTURE STOPPED'
             if ($null -eq $stopped) { throw 'CAPTURE STOPPED state did not appear after STOP CAPTURE' }
             Write-Host 'STOP CAPTURE passed and CAPTURE STOPPED state is visible.'
+
+            $labButton = Find-ByName $root 'Color Training Lab'
+            Invoke-Element $labButton
+            Start-Sleep -Seconds 2
+            $desktop = [System.Windows.Automation.AutomationElement]::RootElement
+            $lab = Find-ByName $desktop 'Color Training Lab — Mohammed Lab PC'
+            if ($null -eq $lab) { throw 'Color Training Lab window did not appear' }
+            if ($null -eq (Find-ByName $lab 'Balanced')) { throw 'Training Lab profile controls did not render' }
+            if ($null -eq (Find-ByName $lab 'Show FOV circle in preview')) { throw 'Training Lab FOV control did not render' }
+            Write-Host 'Color Training Lab window and controls are visible.'
+            Save-Screen 'dist/smoke/training-lab.png'
           }
           finally {
             $p.Refresh()
@@ -115,5 +130,5 @@ jobs:
         if: always()
         with:
           name: MohammedLab-PC-UI-Smoke
-          path: dist/smoke/capturing.png
+          path: dist/smoke/*.png
           if-no-files-found: ignore

@@ -6,6 +6,7 @@ namespace MohammedLab.ColorVision.Core;
 public enum GameMode { Bo7, Bo6, Mw, Mw4, Overwatch }
 public enum AimDevice { Mouse, Controller }
 public enum PadButton { None, Cross, Circle, Square, Triangle, L1, R1, L2, R2, L3, R3, Create, Options, DpadUp, DpadDown, DpadLeft, DpadRight }
+public enum MarkerPreset { Purple, Magenta, Cyan, Red, Yellow }
 
 public sealed class AppConfig
 {
@@ -31,6 +32,15 @@ public sealed class AppConfig
     public bool AutoFire { get; set; }
     public int TriggerThreshold { get; set; } = 60;
     public bool SwapTriggers { get; set; }
+
+    // Visual / offline training detector settings. These settings affect only the
+    // preview/HUD detector and never drive mouse movement, firing, or controller output.
+    public MarkerPreset MarkerPreset { get; set; } = MarkerPreset.Purple;
+    public int FovRadiusPx { get; set; } = 170;
+    public bool ShowFov { get; set; } = true;
+    public double MinConfidence { get; set; } = 0.46;
+    public int StableFramesRequired { get; set; } = 2;
+    public double PreviewSmoothing { get; set; } = 0.35;
 
     [JsonIgnore] public static int[] ZoneWidths { get; } = [160, 240, 320, 400, 480, 560, 640, 800];
     [JsonIgnore] public static int[] ZoneHeights { get; } = [160, 240, 320, 400, 480, 560, 640, 800];
@@ -74,6 +84,10 @@ public sealed class SettingsStore
         s.AimPointOffsetPx = Math.Clamp(s.AimPointOffsetPx, -100, 100);
         s.AntiRecoil = Math.Clamp(s.AntiRecoil, 0f, 20f);
         s.TriggerThreshold = Math.Clamp(s.TriggerThreshold, 1, 255);
+        s.FovRadiusPx = Math.Clamp(s.FovRadiusPx, 40, 400);
+        s.MinConfidence = Math.Clamp(s.MinConfidence, 0.20, 0.95);
+        s.StableFramesRequired = Math.Clamp(s.StableFramesRequired, 1, 6);
+        s.PreviewSmoothing = Math.Clamp(s.PreviewSmoothing, 0.0, 0.90);
     }
 
     private static int Nearest(int value, IReadOnlyList<int> options) => options.OrderBy(x => Math.Abs(x - value)).First();

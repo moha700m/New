@@ -14,6 +14,9 @@ public sealed class AimEngine : IDisposable
     private long _frames, _lastFpsFrames, _lastFpsTicks, _droppedFrames;
     private double _fps, _grabMs;
     private long _lastPreviewTicks;
+    private double _smoothTargetX;
+    private double _smoothTargetY;
+    private bool _hasSmoothTarget;
 
     public AppConfig Config { get; private set; }
     public bool Running => _loop is { IsCompleted: false };
@@ -38,8 +41,8 @@ public sealed class AimEngine : IDisposable
     {
         if (Running) return true;
 
-        // The current detector is visual-only. Physical DualSense/XInput is read directly;
-        // do not create a ViGEm Xbox device just to start capture.
+        // The detector is visual/offline-training only. Physical DualSense/XInput is read
+        // directly; do not create a ViGEm Xbox device just to start capture.
         _virtual.Disconnect();
 
         Interlocked.Exchange(ref _frames, 0);
@@ -49,6 +52,7 @@ public sealed class AimEngine : IDisposable
         _lastFpsFrames = 0;
         _lastFpsTicks = Stopwatch.GetTimestamp();
         _lastPreviewTicks = 0;
+        _hasSmoothTarget = false;
         LastFrameUtc = default;
         _cts = new CancellationTokenSource();
         _loop = Task.Run(() => Loop(_cts.Token));
@@ -64,6 +68,7 @@ public sealed class AimEngine : IDisposable
         _cts.Dispose();
         _cts = null;
         _loop = null;
+        _hasSmoothTarget = false;
     }
 
     private async Task Loop(CancellationToken token)
@@ -79,7 +84,7 @@ public sealed class AimEngine : IDisposable
                 var bitmap = _capture.CaptureCenter(cfg.ZoneWidth, cfg.ZoneHeight, cfg.ScreenIndex);
                 _grabMs = ElapsedMs(grabStart);
 
-                // Player-shaped purple filtering is visual-only. It feeds Preview/HUD telemetry,
+                // Player-shape filtering is visual-only. It feeds Preview/HUD telemetry,
                 // not target-driven mouse/controller movement or automatic firing.
                 LastDetection = _detector.Detect(bitmap, cfg);
                 XInput.TryGetState(0, out var state);
@@ -116,22 +121,58 @@ public sealed class AimEngine : IDisposable
         {
             using var g = Graphics.FromImage(clone);
             using var centerPen = new Pen(Color.FromArgb(230, 255, 138, 36), 2f);
-            using var targetPen = new Pen(Color.FromArgb(235, 66, 211, 146), 2f);
-            using var targetBrush = new SolidBrush(Color.FromArgb(235, 66, 211, 146));
+            using var fovPen = new Pen(Color.FromArgb(120, 255, 138, 36), 1.2f) { DashStyle = System.Drawing.Drawing2D.DashStyle.Dash };
+            var marker = GetMarkerColor(cfg.MarkerPreset);
+            using var targetPen = new Pen(Color.FromArgb(235, marker.R, marker.G, marker.B), 2f);
+            using var targetBrush = new SolidBrush(Color.FromArgb(235, marker.R, marker.G, marker.B));
             var cx = clone.Width / 2;
             var cy = clone.Height / 2;
+
+            if (cfg.ShowFov)
+            {
+                var radius = Math.Clamp(cfg.FovRadiusPx, 40, Math.Max(40, Math.Min(clone.Width, clone.Height) / 2));
+                g.DrawEllipse(fovPen, cx - radius, cy - radius, radius * 2, radius * 2);
+            }
+
             g.DrawLine(centerPen, cx - 8, cy, cx + 8, cy);
             g.DrawLine(centerPen, cx, cy - 8, cx, cy + 8);
+
             if (detection.Found)
             {
+                var smoothing = Math.Clamp(cfg.PreviewSmoothing, 0.0, 0.90);
+                if (!_hasSmoothTarget)
+                {
+                    _smoothTargetX = detection.Target.X;
+                    _smoothTargetY = detection.Target.Y;
+                    _hasSmoothTarget = true;
+                }
+                else
+                {
+                    _smoothTargetX = _smoothTargetX * smoothing + detection.Target.X * (1.0 - smoothing);
+                    _smoothTargetY = _smoothTargetY * smoothing + detection.Target.Y * (1.0 - smoothing);
+                }
+
                 g.DrawRectangle(targetPen, detection.Bounds);
-                g.FillEllipse(targetBrush, detection.Target.X - 4, detection.Target.Y - 4, 8, 8);
+                g.FillEllipse(targetBrush, (float)_smoothTargetX - 4, (float)_smoothTargetY - 4, 8, 8);
+            }
+            else
+            {
+                _hasSmoothTarget = false;
             }
         }
         catch { }
 
         PreviewFrameReady.Invoke(clone);
     }
+
+    private static Color GetMarkerColor(MarkerPreset preset) => preset switch
+    {
+        MarkerPreset.Magenta => Color.Magenta,
+        MarkerPreset.Cyan => Color.Cyan,
+        MarkerPreset.Red => Color.FromArgb(255, 82, 82),
+        MarkerPreset.Yellow => Color.FromArgb(255, 214, 10),
+        _ => Color.FromArgb(191, 64, 255)
+    };
 
     private void UpdateFps()
     {
