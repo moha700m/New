@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using HidSharp;
 using Nefarius.ViGEm.Client;
 using Nefarius.ViGEm.Client.Targets;
 using Nefarius.ViGEm.Client.Targets.Xbox360;
@@ -48,10 +49,230 @@ public static class XInput
     [DllImport("xinput1_4.dll", EntryPoint = "XInputGetState")]
     private static extern uint GetStateNative(uint dwUserIndex, out State pState);
 
+    private static readonly DualSenseUsbReader DualSense = new();
+    public static string ControllerName { get; private set; } = "None";
+
+    static XInput()
+    {
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => DualSense.Dispose();
+    }
+
     public static bool TryGetState(int index, out State state)
     {
-        try { return GetStateNative((uint)Math.Clamp(index, 0, 3), out state) == 0; }
-        catch (DllNotFoundException) { state = default; return false; }
+        // Prefer the real PS5 DualSense over XInput. This also prevents the app
+        // from accidentally reading its own ViGEm virtual Xbox controller.
+        if (DualSense.TryGetState(out state))
+        {
+            ControllerName = "DualSense (USB)";
+            return true;
+        }
+
+        try
+        {
+            if (GetStateNative((uint)Math.Clamp(index, 0, 3), out state) == 0)
+            {
+                ControllerName = "XInput Controller";
+                return true;
+            }
+        }
+        catch (DllNotFoundException) { }
+        catch (EntryPointNotFoundException) { }
+
+        state = default;
+        ControllerName = "None";
+        return false;
+    }
+
+    public static void RescanController() => DualSense.Rescan();
+
+    private sealed class DualSenseUsbReader : IDisposable
+    {
+        private const int SonyVendorId = 0x054C;
+        private const int DualSenseProductId = 0x0CE6;
+        private const int DualSenseEdgeProductId = 0x0DF2;
+
+        private readonly object _sync = new();
+        private readonly CancellationTokenSource _cts = new();
+        private readonly Task _readerTask;
+        private HidStream? _stream;
+        private State _latestState;
+        private DateTime _lastReportUtc;
+        private uint _packetNumber;
+        private volatile bool _connected;
+        private volatile bool _rescanRequested;
+
+        public DualSenseUsbReader()
+        {
+            _readerTask = Task.Run(() => ReaderLoopAsync(_cts.Token));
+        }
+
+        public bool TryGetState(out State state)
+        {
+            lock (_sync)
+            {
+                if (_connected && _lastReportUtc != default && (DateTime.UtcNow - _lastReportUtc).TotalSeconds < 2)
+                {
+                    state = _latestState;
+                    return true;
+                }
+            }
+
+            state = default;
+            return false;
+        }
+
+        public void Rescan() => _rescanRequested = true;
+
+        private async Task ReaderLoopAsync(CancellationToken token)
+        {
+            while (!token.IsCancellationRequested)
+            {
+                HidStream? stream = null;
+                try
+                {
+                    if (!TryOpenDualSense(out var device, out stream))
+                    {
+                        SetDisconnected();
+                        await Task.Delay(700, token).ConfigureAwait(false);
+                        continue;
+                    }
+
+                    _stream = stream;
+                    _rescanRequested = false;
+                    stream.ReadTimeout = 500;
+                    var buffer = new byte[Math.Max(64, device.MaxInputReportLength)];
+
+                    while (!token.IsCancellationRequested && !_rescanRequested)
+                    {
+                        int count;
+                        try
+                        {
+                            count = stream.Read(buffer, 0, buffer.Length);
+                        }
+                        catch (TimeoutException)
+                        {
+                            continue;
+                        }
+
+                        if (count < 11 || buffer[0] != 0x01) continue;
+
+                        var state = new State
+                        {
+                            dwPacketNumber = ++_packetNumber,
+                            Gamepad = ParseUsbReport(buffer)
+                        };
+
+                        lock (_sync)
+                        {
+                            _latestState = state;
+                            _lastReportUtc = DateTime.UtcNow;
+                            _connected = true;
+                        }
+                    }
+                }
+                catch (OperationCanceledException) { }
+                catch
+                {
+                    SetDisconnected();
+                }
+                finally
+                {
+                    try { stream?.Dispose(); } catch { }
+                    if (ReferenceEquals(_stream, stream)) _stream = null;
+                    SetDisconnected();
+                }
+
+                if (!token.IsCancellationRequested)
+                {
+                    try { await Task.Delay(250, token).ConfigureAwait(false); }
+                    catch (OperationCanceledException) { }
+                }
+            }
+        }
+
+        private static bool TryOpenDualSense(out HidDevice device, out HidStream? stream)
+        {
+            foreach (var candidate in DeviceList.Local.GetHidDevices(SonyVendorId))
+            {
+                if (candidate.ProductID != DualSenseProductId && candidate.ProductID != DualSenseEdgeProductId) continue;
+                try
+                {
+                    // The native USB DualSense input report is 64 bytes including report ID 0x01.
+                    // Requiring a report length near 64 avoids opening unrelated Sony HID interfaces.
+                    if (candidate.MaxInputReportLength < 64) continue;
+                    if (!candidate.TryOpen(out var opened)) continue;
+                    device = candidate;
+                    stream = opened;
+                    return true;
+                }
+                catch { }
+            }
+
+            device = null!;
+            stream = null;
+            return false;
+        }
+
+        private static Gamepad ParseUsbReport(byte[] data)
+        {
+            // DualSense USB input report 0x01 (64 bytes including report id):
+            // 1 LX, 2 LY, 3 RX, 4 RY, 5 L2, 6 R2, 7 seq, 8-10 buttons.
+            var buttons0 = data[8];
+            var buttons1 = data[9];
+            var buttons = Buttons.None;
+            var hat = buttons0 & 0x0F;
+
+            if (hat is 0 or 1 or 7) buttons |= Buttons.DPadUp;
+            if (hat is 1 or 2 or 3) buttons |= Buttons.DPadRight;
+            if (hat is 3 or 4 or 5) buttons |= Buttons.DPadDown;
+            if (hat is 5 or 6 or 7) buttons |= Buttons.DPadLeft;
+
+            if ((buttons0 & 0x10) != 0) buttons |= Buttons.X; // Square
+            if ((buttons0 & 0x20) != 0) buttons |= Buttons.A; // Cross
+            if ((buttons0 & 0x40) != 0) buttons |= Buttons.B; // Circle
+            if ((buttons0 & 0x80) != 0) buttons |= Buttons.Y; // Triangle
+            if ((buttons1 & 0x01) != 0) buttons |= Buttons.LeftShoulder;
+            if ((buttons1 & 0x02) != 0) buttons |= Buttons.RightShoulder;
+            if ((buttons1 & 0x10) != 0) buttons |= Buttons.Back; // Create
+            if ((buttons1 & 0x20) != 0) buttons |= Buttons.Start; // Options
+            if ((buttons1 & 0x40) != 0) buttons |= Buttons.LeftThumb;
+            if ((buttons1 & 0x80) != 0) buttons |= Buttons.RightThumb;
+
+            return new Gamepad
+            {
+                wButtons = buttons,
+                bLeftTrigger = data[5],
+                bRightTrigger = data[6],
+                sThumbLX = ToAxis(data[1], invert: false),
+                sThumbLY = ToAxis(data[2], invert: true),
+                sThumbRX = ToAxis(data[3], invert: false),
+                sThumbRY = ToAxis(data[4], invert: true)
+            };
+        }
+
+        private static short ToAxis(byte value, bool invert)
+        {
+            var centered = value - 128;
+            if (invert) centered = -centered;
+            return (short)Math.Clamp(centered * 256, short.MinValue, short.MaxValue);
+        }
+
+        private void SetDisconnected()
+        {
+            lock (_sync)
+            {
+                _connected = false;
+                _lastReportUtc = default;
+            }
+        }
+
+        public void Dispose()
+        {
+            _cts.Cancel();
+            try { _stream?.Dispose(); } catch { }
+            try { _readerTask.Wait(1000); } catch { }
+            _cts.Dispose();
+        }
     }
 }
 
