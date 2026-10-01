@@ -11,7 +11,7 @@ public static class MouseInjector
     private const uint MOVE = 0x0001, LEFTDOWN = 0x0002, LEFTUP = 0x0004;
     [DllImport("user32.dll")] private static extern void mouse_event(uint flags, int dx, int dy, uint data, UIntPtr extra);
     [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int vKey);
-    public static bool IsDown(int virtualKey) => (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
+    public static bool IsDown(int virtualKey) => (GetAsyncKeyState(vKey: virtualKey) & 0x8000) != 0;
     public static void Move(int dx, int dy) { if (dx != 0 || dy != 0) mouse_event(MOVE, dx, dy, 0, UIntPtr.Zero); }
     public static void LeftDown() => mouse_event(LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
     public static void LeftUp() => mouse_event(LEFTUP, 0, 0, 0, UIntPtr.Zero);
@@ -130,7 +130,7 @@ public static class XInput
                 HidStream? stream = null;
                 try
                 {
-                    if (!TryOpenDualSense(out var device, out stream))
+                    if (!TryOpenDualSense(out var device, out stream) || stream is null)
                     {
                         SetDisconnected();
                         await Task.Delay(700, token).ConfigureAwait(false);
@@ -140,7 +140,7 @@ public static class XInput
                     _stream = stream;
                     _rescanRequested = false;
                     stream.ReadTimeout = 500;
-                    var buffer = new byte[Math.Max(64, device.MaxInputReportLength)];
+                    var buffer = new byte[Math.Max(64, device.GetMaxInputReportLength())];
 
                     while (!token.IsCancellationRequested && !_rescanRequested)
                     {
@@ -197,10 +197,9 @@ public static class XInput
                 if (candidate.ProductID != DualSenseProductId && candidate.ProductID != DualSenseEdgeProductId) continue;
                 try
                 {
-                    // The native USB DualSense input report is 64 bytes including report ID 0x01.
-                    // Requiring a report length near 64 avoids opening unrelated Sony HID interfaces.
-                    if (candidate.MaxInputReportLength < 64) continue;
-                    if (!candidate.TryOpen(out var opened)) continue;
+                    // Native DualSense USB input report 0x01 is 64 bytes including report ID.
+                    if (candidate.GetMaxInputReportLength() < 64) continue;
+                    if (!candidate.TryOpen(out var opened) || opened is null) continue;
                     device = candidate;
                     stream = opened;
                     return true;
@@ -215,11 +214,11 @@ public static class XInput
 
         private static Gamepad ParseUsbReport(byte[] data)
         {
-            // DualSense USB input report 0x01 (64 bytes including report id):
+            // DualSense USB report 0x01:
             // 1 LX, 2 LY, 3 RX, 4 RY, 5 L2, 6 R2, 7 seq, 8-10 buttons.
             var buttons0 = data[8];
             var buttons1 = data[9];
-            var buttons = Buttons.None;
+            var buttons = (Buttons)0;
             var hat = buttons0 & 0x0F;
 
             if (hat is 0 or 1 or 7) buttons |= Buttons.DPadUp;
