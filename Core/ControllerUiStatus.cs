@@ -8,7 +8,6 @@ internal static class ControllerUiStatus
 {
     private static readonly object Sync = new();
     private static long _lastPostTicks;
-    private static string _lastSignature = string.Empty;
 
     public static void Post(bool connected)
     {
@@ -20,15 +19,12 @@ internal static class ControllerUiStatus
         var name = XInput.ControllerName;
         var dualSensePresent = XInput.DualSenseUsbPresent;
         var dualSenseStatus = XInput.DualSenseStatus;
-        var signature = $"{connected}|{source}|{name}|{dualSensePresent}|{dualSenseStatus}";
         var now = Environment.TickCount64;
 
         lock (Sync)
         {
-            // MainWindow's controller poll runs every 100 ms. Post after that poll so the
-            // source-specific label wins over the generic Controller Connected label.
-            if (signature == _lastSignature && now - _lastPostTicks < 80) return;
-            _lastSignature = signature;
+            // Keep the source-specific text authoritative without flooding Dispatcher.
+            if (now - _lastPostTicks < 35) return;
             _lastPostTicks = now;
         }
 
@@ -72,6 +68,6 @@ internal static class ControllerUiStatus
             if (connection is not null) connection.Text = connectionText;
             if (sidebar is not null) sidebar.Text = connected ? $"Device: {name}" : "Device: No controller";
             if (check is not null) check.Text = detailText;
-        }, DispatcherPriority.Background);
+        }, DispatcherPriority.ContextIdle);
     }
 }
