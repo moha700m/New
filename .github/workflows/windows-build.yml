@@ -1,4 +1,5 @@
 name: Windows Build
+# Validation refresh: owner-triggered CI for reviewed PR
 
 on:
   workflow_dispatch:
