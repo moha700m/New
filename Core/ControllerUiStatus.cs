@@ -1,4 +1,3 @@
-using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
 
@@ -11,7 +10,7 @@ internal static class ControllerUiStatus
 
     public static void Post(bool connected)
     {
-        var app = Application.Current;
+        var app = System.Windows.Application.Current;
         var window = app?.MainWindow;
         if (window is null) return;
 
@@ -23,7 +22,6 @@ internal static class ControllerUiStatus
 
         lock (Sync)
         {
-            // Keep the source-specific text authoritative without flooding Dispatcher.
             if (now - _lastPostTicks < 35) return;
             _lastPostTicks = now;
         }
