@@ -13,7 +13,7 @@ public partial class MainWindow
         if (_trainingLabNavInstalled) return;
         if (NavGame.Parent is not StackPanel navStack) return;
 
-        var button = new Button
+        var button = new System.Windows.Controls.Button
         {
             Content = "Color Training Lab",
             Style = (Style)FindResource("NavButton"),
