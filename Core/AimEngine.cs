@@ -13,7 +13,6 @@ public sealed class AimEngine : IDisposable
     private Task? _loop;
     private long _frames, _lastFpsFrames, _lastFpsTicks, _droppedFrames;
     private double _fps, _grabMs;
-    private bool _mouseAutoFireDown;
     private long _lastPreviewTicks;
 
     public AppConfig Config { get; private set; }
@@ -62,7 +61,6 @@ public sealed class AimEngine : IDisposable
         if (_cts is null) return;
         _cts.Cancel();
         try { if (_loop is not null) await _loop.ConfigureAwait(false); } catch (OperationCanceledException) { }
-        if (_mouseAutoFireDown) { MouseInjector.LeftUp(); _mouseAutoFireDown = false; }
         _virtual.Disconnect();
         _cts.Dispose();
         _cts = null;
@@ -82,10 +80,12 @@ public sealed class AimEngine : IDisposable
                 var bitmap = _capture.CaptureCenter(cfg.ZoneWidth, cfg.ZoneHeight, cfg.ScreenIndex);
                 _grabMs = ElapsedMs(grabStart);
 
+                // Player-shaped purple filtering is visual-only. It feeds Preview/HUD telemetry,
+                // not target-driven mouse/controller movement or automatic firing.
                 LastDetection = _detector.Detect(bitmap, cfg);
                 XInput.TryGetState(0, out var state);
                 LastControllerState = state;
-                ApplyAim(cfg, state, LastDetection);
+                ApplyVisualOnlyPassThrough(cfg, state);
 
                 Interlocked.Increment(ref _frames);
                 LastFrameUtc = DateTime.UtcNow;
@@ -135,69 +135,12 @@ public sealed class AimEngine : IDisposable
         PreviewFrameReady.Invoke(clone);
     }
 
-    private void ApplyAim(AppConfig cfg, XInput.State state, DetectionResult d)
+    private void ApplyVisualOnlyPassThrough(AppConfig cfg, XInput.State state)
     {
-        var aimHeld = cfg.Device == AimDevice.Mouse ? MouseInjector.IsDown(cfg.AimKey) : IsPressed(cfg.AimButton, state.Gamepad, cfg);
-        var fireHeld = cfg.Device == AimDevice.Mouse ? MouseInjector.IsDown(0x01) : IsPressed(cfg.FireButton, state.Gamepad, cfg);
-        var active = cfg.AlwaysTrack || !cfg.HoldToAim || aimHeld;
-
-        if (cfg.Device == AimDevice.Mouse)
-        {
-            if (active && d.Found)
-            {
-                var dx = d.Target.X - cfg.ZoneWidth / 2.0;
-                var dy = d.Target.Y - cfg.ZoneHeight / 2.0;
-                var divisor = Math.Max(1.0, 11.0 - cfg.Strength);
-                MouseInjector.Move((int)Math.Round(dx / divisor), (int)Math.Round(dy / divisor));
-            }
-            if (cfg.AntiRecoilOn && fireHeld) MouseInjector.Move(0, (int)Math.Round(cfg.AntiRecoil));
-            if (cfg.AutoFire && active && d.Found)
-            {
-                if (!_mouseAutoFireDown) { MouseInjector.LeftDown(); _mouseAutoFireDown = true; }
-            }
-            else if (_mouseAutoFireDown) { MouseInjector.LeftUp(); _mouseAutoFireDown = false; }
-            return;
-        }
-
-        if (!_virtual.Connected) return;
-        var ax = 0.0;
-        var ay = 0.0;
-        if (active && d.Found)
-        {
-            var dx = (d.Target.X - cfg.ZoneWidth / 2.0) / (cfg.ZoneWidth / 2.0);
-            var dy = (d.Target.Y - cfg.ZoneHeight / 2.0) / (cfg.ZoneHeight / 2.0);
-            var gain = Math.Clamp(cfg.Strength / 10.0, .05, 1.0);
-            ax = Math.Clamp(dx * gain, -1, 1);
-            ay = Math.Clamp(-dy * gain, -1, 1);
-        }
-        if (cfg.AntiRecoilOn && fireHeld) ay -= Math.Clamp(cfg.AntiRecoil / 100.0, 0, .5);
-        _virtual.Submit(state.Gamepad, ax, ay, cfg.AutoFire && active && d.Found, cfg.SwapTriggers);
-    }
-
-    private static bool IsPressed(PadButton b, XInput.Gamepad g, AppConfig cfg)
-    {
-        var lt = cfg.SwapTriggers ? g.bRightTrigger : g.bLeftTrigger;
-        var rt = cfg.SwapTriggers ? g.bLeftTrigger : g.bRightTrigger;
-        return b switch
-        {
-            PadButton.Cross => g.wButtons.HasFlag(XInput.Buttons.A),
-            PadButton.Circle => g.wButtons.HasFlag(XInput.Buttons.B),
-            PadButton.Square => g.wButtons.HasFlag(XInput.Buttons.X),
-            PadButton.Triangle => g.wButtons.HasFlag(XInput.Buttons.Y),
-            PadButton.L1 => g.wButtons.HasFlag(XInput.Buttons.LeftShoulder),
-            PadButton.R1 => g.wButtons.HasFlag(XInput.Buttons.RightShoulder),
-            PadButton.L2 => lt >= cfg.TriggerThreshold,
-            PadButton.R2 => rt >= cfg.TriggerThreshold,
-            PadButton.L3 => g.wButtons.HasFlag(XInput.Buttons.LeftThumb),
-            PadButton.R3 => g.wButtons.HasFlag(XInput.Buttons.RightThumb),
-            PadButton.Create => g.wButtons.HasFlag(XInput.Buttons.Back),
-            PadButton.Options => g.wButtons.HasFlag(XInput.Buttons.Start),
-            PadButton.DpadUp => g.wButtons.HasFlag(XInput.Buttons.DPadUp),
-            PadButton.DpadDown => g.wButtons.HasFlag(XInput.Buttons.DPadDown),
-            PadButton.DpadLeft => g.wButtons.HasFlag(XInput.Buttons.DPadLeft),
-            PadButton.DpadRight => g.wButtons.HasFlag(XInput.Buttons.DPadRight),
-            _ => false
-        };
+        // Preserve ordinary controller passthrough while keeping the new player detector
+        // strictly visual. Mouse mode intentionally injects no movement/clicks here.
+        if (cfg.Device != AimDevice.Controller || !_virtual.Connected) return;
+        _virtual.Submit(state.Gamepad, 0, 0, autoFire: false, swapTriggers: cfg.SwapTriggers);
     }
 
     private void UpdateFps()
