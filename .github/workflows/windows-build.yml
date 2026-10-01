@@ -1,5 +1,5 @@
 name: Windows Build
-# Validation refresh: owner-triggered CI for reviewed PR
+# Validation refresh: owner-triggered CI after final XAML fix
 
 on:
   workflow_dispatch:
