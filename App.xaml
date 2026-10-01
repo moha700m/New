@@ -587,7 +587,7 @@
                         <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8" Padding="{TemplateBinding Padding}"
                                 Effect="{StaticResource Effect.Popup}">
-                            <ContentPresenter TextBlock.TextWrapping="Wrap"/>
+                            <ContentPresenter/>
                         </Border>
                     </ControlTemplate>
                 </Setter.Value>
