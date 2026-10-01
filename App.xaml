@@ -472,7 +472,7 @@
                                 <Border x:Name="Thumb" Width="16" Height="16" CornerRadius="8" Background="#C6CCD8"
                                         HorizontalAlignment="Left" Margin="3,0,0,0">
                                     <Border.RenderTransform>
-                                        <TranslateTransform x:Name="ThumbShift" X="0"/>
+                                        <TranslateTransform X="0"/>
                                     </Border.RenderTransform>
                                 </Border>
                             </Grid>
@@ -484,18 +484,21 @@
                                 <Setter TargetName="Track" Property="Background" Value="{StaticResource Brush.Accent}"/>
                                 <Setter TargetName="Track" Property="BorderBrush" Value="{StaticResource Brush.Accent}"/>
                                 <Setter TargetName="Thumb" Property="Background" Value="{StaticResource Brush.OnAccent}"/>
-                                <Setter TargetName="ThumbShift" Property="X" Value="18"/>
                                 <Trigger.EnterActions>
                                     <BeginStoryboard>
                                         <Storyboard>
-                                            <DoubleAnimation Storyboard.TargetName="ThumbShift" Storyboard.TargetProperty="X" To="18" Duration="0:0:0.12"/>
+                                            <DoubleAnimation Storyboard.TargetName="Thumb"
+                                                             Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
+                                                             To="18" Duration="0:0:0.12"/>
                                         </Storyboard>
                                     </BeginStoryboard>
                                 </Trigger.EnterActions>
                                 <Trigger.ExitActions>
                                     <BeginStoryboard>
                                         <Storyboard>
-                                            <DoubleAnimation Storyboard.TargetName="ThumbShift" Storyboard.TargetProperty="X" To="0" Duration="0:0:0.12"/>
+                                            <DoubleAnimation Storyboard.TargetName="Thumb"
+                                                             Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
+                                                             To="0" Duration="0:0:0.12"/>
                                         </Storyboard>
                                     </BeginStoryboard>
                                 </Trigger.ExitActions>
@@ -528,8 +531,15 @@
                 </Setter.Value>
             </Setter>
         </Style>
-        <ControlTemplate x:Key="SliderTrack" TargetType="RepeatButton">
-            <Border Background="Transparent" SnapsToDevicePixels="True"/>
+        <ControlTemplate x:Key="SliderDecreaseTrack" TargetType="RepeatButton">
+            <Grid>
+                <Border Height="4" CornerRadius="2" Background="{StaticResource Brush.Accent}" VerticalAlignment="Center" SnapsToDevicePixels="True"/>
+            </Grid>
+        </ControlTemplate>
+        <ControlTemplate x:Key="SliderIncreaseTrack" TargetType="RepeatButton">
+            <Grid>
+                <Border Height="4" CornerRadius="2" Background="#3A404D" VerticalAlignment="Center" SnapsToDevicePixels="True"/>
+            </Grid>
         </ControlTemplate>
         <Style TargetType="Slider">
             <Setter Property="Margin" Value="0,10,0,6"/>
@@ -540,17 +550,15 @@
                     <ControlTemplate TargetType="Slider">
                         <Grid>
                             <Border Height="4" CornerRadius="2" Background="#3A404D" VerticalAlignment="Center"/>
-                            <Border x:Name="FilledTrack" Height="4" CornerRadius="2" Background="{StaticResource Brush.Accent}"
-                                    VerticalAlignment="Center" HorizontalAlignment="Left" Width="0"/>
                             <Track x:Name="PART_Track">
                                 <Track.Thumb>
                                     <Thumb Style="{StaticResource SliderThumb}"/>
                                 </Track.Thumb>
                                 <Track.DecreaseRepeatButton>
-                                    <RepeatButton Template="{StaticResource SliderTrack}" Command="Slider.DecreaseLarge"/>
+                                    <RepeatButton Template="{StaticResource SliderDecreaseTrack}" Command="Slider.DecreaseLarge"/>
                                 </Track.DecreaseRepeatButton>
                                 <Track.IncreaseRepeatButton>
-                                    <RepeatButton Template="{StaticResource SliderTrack}" Command="Slider.IncreaseLarge"/>
+                                    <RepeatButton Template="{StaticResource SliderIncreaseTrack}" Command="Slider.IncreaseLarge"/>
                                 </Track.IncreaseRepeatButton>
                             </Track>
                         </Grid>

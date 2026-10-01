@@ -30,6 +30,7 @@ public partial class MainWindow : Window
     private XInput.State _latestPhysicalState;
     private Storyboard? _capturePulse;
     private Storyboard? _toastStoryboard;
+    private DispatcherTimer? _settingsToastTimer;
     private DateTime _lastTesterUpdate = DateTime.MinValue;
     private bool _lastControllerConnected;
     private bool _toastShownForRunning;
@@ -61,6 +62,7 @@ public partial class MainWindow : Window
         Closed += async (_, _) =>
         {
             _uiTimer.Stop();
+            _settingsToastTimer?.Stop();
             StopCapturePulse();
             _toastStoryboard?.Stop();
             HideOverlay();
@@ -141,6 +143,22 @@ public partial class MainWindow : Window
         _engine.ApplyConfig(_settings);
         RefreshUiText();
         UpdateHudVisibility();
+        DebounceSettingsSavedToast();
+    }
+
+    private void DebounceSettingsSavedToast()
+    {
+        // Sliders fire ValueChanged continuously while dragging; only toast once changes settle.
+        _settingsToastTimer ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(900) };
+        _settingsToastTimer.Stop();
+        _settingsToastTimer.Tick -= SettingsToastTimer_Tick;
+        _settingsToastTimer.Tick += SettingsToastTimer_Tick;
+        _settingsToastTimer.Start();
+    }
+
+    private void SettingsToastTimer_Tick(object? sender, EventArgs e)
+    {
+        _settingsToastTimer?.Stop();
         ShowToast("Settings saved", ResourceBrush("SuccessBrush"));
     }
 
