@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { LiveModel } from "../useLiveConfig";
 
-const GROUPS: { key: LiveModel["category"]; label: string }[] = [
+const GROUPS: { key: LiveModel["category"] | "UNCENSORED"; label: string }[] = [
+  { key: "UNCENSORED", label: "بدون فلترة" },
   { key: "TEXT", label: "عام" },
   { key: "REASONING", label: "تفكير واستدلال" },
   { key: "CODE", label: "برمجة" },
@@ -63,7 +64,9 @@ export function ModelSelector({ models, value, onChange, defaultId, signedIn }: 
           <div className="max-h-[60vh] overflow-y-auto p-1.5" role="listbox">
             {!filtered.length && <p className="p-3 text-sm text-slate-400">لا توجد نماذج مطابقة.</p>}
             {GROUPS.map((g) => {
-              const list = filtered.filter((m) => m.category === g.key);
+              const list = filtered.filter((m) =>
+                g.key === "UNCENSORED" ? Boolean(m.capabilities.uncensored) && m.category !== "IMAGE" : m.category === g.key && !(m.capabilities.uncensored && m.category !== "IMAGE"),
+              );
               if (!list.length) return null;
               return (
                 <div key={g.key} className="mb-1">

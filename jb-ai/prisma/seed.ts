@@ -4,9 +4,25 @@ import crypto from "node:crypto";
 
 const prisma = new PrismaClient();
 
-function encrypt(plain: string) {
+function masterKey() {
   const raw = process.env.MASTER_ENCRYPTION_KEY!;
-  const key = /^[0-9a-fA-F]{64}$/.test(raw) ? Buffer.from(raw, "hex") : Buffer.from(raw, "base64");
+  return /^[0-9a-fA-F]{64}$/.test(raw) ? Buffer.from(raw, "hex") : Buffer.from(raw, "base64");
+}
+
+function decrypt(payload: string): string | null {
+  try {
+    const [v, ivB, tagB, dataB] = payload.split(":");
+    if (v !== "v1" || !ivB || !tagB || !dataB) return null;
+    const d = crypto.createDecipheriv("aes-256-gcm", masterKey(), Buffer.from(ivB, "base64"));
+    d.setAuthTag(Buffer.from(tagB, "base64"));
+    return Buffer.concat([d.update(Buffer.from(dataB, "base64")), d.final()]).toString("utf8");
+  } catch {
+    return null;
+  }
+}
+
+function encrypt(plain: string) {
+  const key = masterKey();
   const iv = crypto.randomBytes(12);
   const c = crypto.createCipheriv("aes-256-gcm", key, iv);
   const enc = Buffer.concat([c.update(plain, "utf8"), c.final()]);
@@ -36,10 +52,159 @@ async function main() {
       },
     });
   }
+  // VENICE_API_KEY (Vercel env) is the source of truth for the Venice key: keep the encrypted copy in sync.
+  const envKey = process.env.VENICE_API_KEY?.trim();
+  if (envKey && process.env.MASTER_ENCRYPTION_KEY) {
+    const current = venice.apiKeyEncrypted ? decrypt(venice.apiKeyEncrypted) : null;
+    if (current !== envKey) {
+      venice = await prisma.provider.update({ where: { id: venice.id }, data: { apiKeyEncrypted: encrypt(envKey), apiKeyLast4: envKey.slice(-4) } });
+      console.log("Venice API key updated from VENICE_API_KEY.");
+    }
+  }
   await prisma.routingConfig.upsert({ where: { id: "global" }, create: { id: "global", defaultProviderId: venice.id }, update: {} });
   await prisma.configState.upsert({ where: { id: "global" }, create: { id: "global", version: 1 }, update: {} });
   await prisma.setting.upsert({ where: { key: "system" }, create: { key: "system", value: {} }, update: {} });
+  try {
+    await syncVeniceCatalog(venice.id, venice.baseUrl);
+  } catch (e) {
+    console.warn("Venice catalog sync skipped:", (e as Error).message);
+  }
   console.log("Seed complete. Provider:", venice.name);
+}
+
+/* ------------------------------------------------------------------ Venice catalog
+ * Venice's /models and /models/traits endpoints are public, so the full catalog is synced on every deploy.
+ * Every Venice model (incl. the uncensored ones) is offered to every plan. Newly discovered models are enabled
+ * automatically; a one-time bootstrap also enables models that an earlier sync stored as disabled.
+ * Later admin curation (disabling a model, removing it from a plan) is preserved on subsequent deploys. */
+async function veniceGet(baseUrl: string, path: string) {
+  const res = await fetch(`${baseUrl.replace(/\/$/, "")}${path}`, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(30000) });
+  if (!res.ok) throw new Error(`GET ${path} -> ${res.status}`);
+  return (await res.json()) as { data?: any };
+}
+
+function textModelFields(m: any) {
+  const spec = m.model_spec ?? {};
+  const c = spec.capabilities ?? {};
+  const traits: string[] = Array.isArray(spec.traits) ? spec.traits : [];
+  const code = Boolean(c.optimizedForCode) || traits.includes("default_code");
+  const reasoning = Boolean(c.supportsReasoning);
+  return {
+    displayName: spec.name || m.id,
+    description: spec.description?.slice(0, 2000),
+    category: (code ? "CODE" : reasoning ? "REASONING" : c.supportsVision ? "VISION" : "TEXT") as "CODE" | "REASONING" | "VISION" | "TEXT",
+    caps: {
+      supportsText: true,
+      supportsStreaming: true,
+      supportsVision: Boolean(c.supportsVision),
+      supportsTools: Boolean(c.supportsFunctionCalling),
+      supportsWebSearch: Boolean(c.supportsWebSearch),
+      supportsReasoning: reasoning,
+      supportsStructuredOutput: Boolean(c.supportsResponseSchema),
+      supportsImageGeneration: false,
+      supportsCode: code,
+      extraCapabilities: { uncensored: Boolean(spec.uncensored), e2ee: Boolean(c.supportsE2EE), privacy: spec.privacy, traits, reasoningEffort: Boolean(c.supportsReasoningEffort), multipleImages: Boolean(c.supportsMultipleImages) },
+      contextLength: spec.availableContextTokens ?? m.context_length ?? null,
+      maxOutputTokens: spec.maxCompletionTokens ?? null,
+      inputPricePerM: spec.pricing?.input?.usd ?? null,
+      outputPricePerM: spec.pricing?.output?.usd ?? null,
+      offline: Boolean(spec.offline),
+      rawMetadata: m,
+      inCatalog: true,
+    },
+  };
+}
+
+function imageModelFields(m: any) {
+  const spec = m.model_spec ?? {};
+  return {
+    displayName: spec.name || m.id,
+    description: spec.description?.slice(0, 2000),
+    category: "IMAGE" as const,
+    caps: {
+      supportsText: false,
+      supportsStreaming: false,
+      supportsVision: false,
+      supportsTools: false,
+      supportsWebSearch: false,
+      supportsReasoning: false,
+      supportsStructuredOutput: false,
+      supportsImageGeneration: true,
+      supportsCode: false,
+      extraCapabilities: { traits: spec.traits ?? [], privacy: spec.privacy, constraints: spec.constraints, pricePerImageUsd: spec.pricing?.generation?.usd },
+      offline: Boolean(spec.offline),
+      rawMetadata: m,
+      inCatalog: true,
+    },
+  };
+}
+
+async function syncVeniceCatalog(providerId: string, baseUrl: string) {
+  const [text, image, textTraits, imageTraits] = await Promise.all([
+    veniceGet(baseUrl, "/models?type=text"),
+    veniceGet(baseUrl, "/models?type=image"),
+    veniceGet(baseUrl, "/models/traits").catch(() => ({ data: {} })),
+    veniceGet(baseUrl, "/models/traits?type=image").catch(() => ({ data: {} })),
+  ]);
+  const discovered = [
+    ...(Array.isArray(text.data) ? text.data : []).map((m: any, i: number) => ({ modelId: m.id as string, sortOrder: 100 + i, ...textModelFields(m) })),
+    ...(Array.isArray(image.data) ? image.data : []).map((m: any, i: number) => ({ modelId: m.id as string, sortOrder: 1000 + i, ...imageModelFields(m) })),
+  ].filter((d) => typeof d.modelId === "string");
+  if (!discovered.length) throw new Error("Venice returned no models");
+
+  const BOOTSTRAP = "venice_open_catalog_v1";
+  const bootstrapped = Boolean(await prisma.setting.findUnique({ where: { key: BOOTSTRAP } }));
+  const plans = await prisma.plan.findMany({ select: { id: true } });
+  const existing = await prisma.aiModel.findMany({ where: { providerId } });
+  const byId = new Map(existing.map((m) => [m.modelId, m]));
+  let created = 0;
+  for (const d of discovered) {
+    const prev = byId.get(d.modelId);
+    let rowId: string;
+    if (prev) {
+      await prisma.aiModel.update({ where: { id: prev.id }, data: { ...d.caps, ...(bootstrapped ? {} : { enabled: true }) } });
+      rowId = prev.id;
+    } else {
+      const row = await prisma.aiModel.create({
+        data: { providerId, modelId: d.modelId, displayName: d.displayName, description: d.description, category: d.category, source: "SYNCED", enabled: true, sortOrder: d.sortOrder, ...d.caps },
+      });
+      rowId = row.id;
+      created++;
+    }
+    if (!prev || !bootstrapped) {
+      await prisma.planModel.createMany({ data: plans.map((p) => ({ planId: p.id, modelId: rowId })), skipDuplicates: true });
+    }
+  }
+  const seen = new Set(discovered.map((d) => d.modelId));
+  const gone = existing.filter((m) => m.source === "SYNCED" && !seen.has(m.modelId));
+  if (gone.length) await prisma.aiModel.updateMany({ where: { id: { in: gone.map((m) => m.id) } }, data: { inCatalog: false } });
+
+  // Routing defaults from Venice traits — only fill empty slots so admin choices win.
+  const routing = await prisma.routingConfig.findUniqueOrThrow({ where: { id: "global" } });
+  const t = textTraits.data || {};
+  const it = imageTraits.data || {};
+  const want: Record<string, string | undefined> = {
+    defaultTextModelId: t.default,
+    defaultReasoningModelId: t.default_reasoning,
+    defaultCodingModelId: t.default_code,
+    defaultVisionModelId: t.default_vision,
+    defaultImageModelId: it.default,
+  };
+  const rows = await prisma.aiModel.findMany({ where: { providerId }, select: { id: true, modelId: true } });
+  const rowByModel = new Map(rows.map((r) => [r.modelId, r.id]));
+  const routingData: Record<string, string> = {};
+  for (const [field, modelId] of Object.entries(want)) {
+    if (!modelId || (routing as any)[field]) continue;
+    const id = rowByModel.get(modelId);
+    if (id) routingData[field] = id;
+  }
+  if (!routing.defaultProviderId) routingData.defaultProviderId = providerId;
+  if (Object.keys(routingData).length) await prisma.routingConfig.update({ where: { id: "global" }, data: routingData });
+
+  await prisma.provider.update({ where: { id: providerId }, data: { lastSyncAt: new Date(), lastSyncStatus: "ok", lastSyncError: null, lastSyncCount: discovered.length } });
+  if (!bootstrapped) await prisma.setting.create({ data: { key: BOOTSTRAP, value: { at: new Date().toISOString() } } });
+  await prisma.configState.update({ where: { id: "global" }, data: { version: { increment: 1 } } });
+  console.log(`Venice catalog synced: ${discovered.length} models (${created} new)${bootstrapped ? "" : ", all enabled for every plan"}.`);
 }
 
 main()

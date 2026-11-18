@@ -36,6 +36,7 @@ export async function syncProviderModels(providerId: string) {
     throw new HttpError(502, `فشل اكتشاف النماذج: ${(e as Error).message}`);
   }
   const existing = await prisma.aiModel.findMany({ where: { providerId } });
+  const plans = await prisma.plan.findMany({ select: { id: true } });
   const byId = new Map(existing.map((m) => [m.modelId, m]));
   const seen = new Set<string>();
   let created = 0;
@@ -68,9 +69,11 @@ export async function syncProviderModels(providerId: string) {
       await prisma.aiModel.update({ where: { id: prev.id }, data: caps });
       updated++;
     } else {
-      await prisma.aiModel.create({
-        data: { providerId, modelId: d.modelId, displayName: d.displayName, description: d.description?.slice(0, 2000), category: d.category, source: "SYNCED", enabled: false, ...caps },
+      // New models are offered right away to every plan (owner can still disable or re-scope them in the admin).
+      const row = await prisma.aiModel.create({
+        data: { providerId, modelId: d.modelId, displayName: d.displayName, description: d.description?.slice(0, 2000), category: d.category, source: "SYNCED", enabled: true, ...caps },
       });
+      if (plans.length) await prisma.planModel.createMany({ data: plans.map((p) => ({ planId: p.id, modelId: row.id })), skipDuplicates: true });
       created++;
     }
   }
@@ -121,7 +124,7 @@ export interface PublicModel {
   category: ModelCategory;
   provider: string;
   contextLength: number | null;
-  capabilities: { vision: boolean; webSearch: boolean; reasoning: boolean; tools: boolean; imageGeneration: boolean; code: boolean; streaming: boolean; structuredOutput: boolean };
+  capabilities: { vision: boolean; webSearch: boolean; reasoning: boolean; tools: boolean; imageGeneration: boolean; code: boolean; streaming: boolean; structuredOutput: boolean; uncensored: boolean };
   plans: string[]; // plan keys that may use it
 }
 
@@ -142,6 +145,12 @@ registerInvalidator(() => {
 /** A model is usable when it and its provider are enabled, it's still offered by the provider, and it isn't marked offline. */
 export function isUsable(m: AiModel & { provider: Provider }) {
   return m.enabled && m.provider.enabled && (m.inCatalog || m.source === "MANUAL") && !m.offline;
+}
+
+function isUncensored(m: AiModel) {
+  const extra = (m.extraCapabilities ?? {}) as { uncensored?: boolean };
+  const raw = (m.rawMetadata ?? {}) as { model_spec?: { uncensored?: boolean } };
+  return Boolean(extra.uncensored ?? raw.model_spec?.uncensored) || /uncensored|abliterat|heretic/i.test(m.modelId);
 }
 
 export async function getPublicCatalog(): Promise<PublicCatalog> {
@@ -181,6 +190,7 @@ export async function getPublicCatalog(): Promise<PublicCatalog> {
         code: m.supportsCode,
         streaming: m.supportsStreaming,
         structuredOutput: m.supportsStructuredOutput,
+        uncensored: isUncensored(m),
       },
       plans: planKeysFor(m),
     })),
