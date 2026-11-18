@@ -28,7 +28,6 @@ export function redactMcp<T extends { tokenEncrypted: string | null; tools: unkn
 
 /** Connector gallery (one-click "ربط"). Auth is auto-detected: OAuth 2.1 + dynamic registration, or none. */
 export const CONNECTOR_PRESETS = [
-  { key: "vercel", name: "Vercel", url: "https://mcp.vercel.com", desc: "مشاريعك ونشراتك وسجلاتها على Vercel" },
   { key: "cloudflare", name: "Cloudflare", url: "https://bindings.mcp.cloudflare.com/mcp", desc: "Workers و KV و R2 و D1 في حسابك" },
   { key: "notion", name: "Notion", url: "https://mcp.notion.com/mcp", desc: "صفحاتك وقواعد بياناتك في Notion" },
   { key: "linear", name: "Linear", url: "https://mcp.linear.app/mcp", desc: "المهام والمشاريع في Linear" },
