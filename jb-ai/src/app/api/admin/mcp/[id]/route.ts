@@ -17,10 +17,12 @@ export const PATCH = adminRoute<{ id: string }>(async ({ req, params, log }) => 
   if (token) {
     data.tokenEncrypted = encryptSecret(token);
     data.tokenLast4 = last4(token);
-    data.tools = undefined;
+    data.authType = "token";
+    data.connectedAt = new Date();
   } else if (clearToken) {
     data.tokenEncrypted = null;
     data.tokenLast4 = null;
+    data.connectedAt = null;
   }
   // connection settings changed → tool cache is stale
   if (token || clearToken || rest.url || rest.transport || rest.extraHeaders) Object.assign(data, { tools: [], lastSyncAt: null });

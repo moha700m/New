@@ -10,7 +10,7 @@ export const NAV = [
   { href: "/admin/users", label: "المستخدمون", icon: Users },
   { href: "/admin/providers", label: "مزوّدو الذكاء الاصطناعي", icon: Server },
   { href: "/admin/engines", label: "محركات الذكاء الاصطناعي", icon: Cpu },
-  { href: "/admin/mcp", label: "خوادم MCP و GitHub (الوكيل)", icon: Plug },
+  { href: "/admin/mcp", label: "الموصّلات و GitHub (الوكيل)", icon: Plug },
   { href: "/admin/models", label: "إدارة النماذج", icon: Boxes },
   { href: "/admin/catalog", label: "كتالوج النماذج", icon: LayoutGrid },
   { href: "/admin/routing", label: "قواعد التوجيه", icon: Route },

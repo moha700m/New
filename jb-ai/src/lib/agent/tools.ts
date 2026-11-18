@@ -7,6 +7,8 @@ import { joinUrl } from "../providers/http";
 import { runtimeConfig } from "../providers";
 import { violatesMinorSafety, MINOR_SAFETY_MESSAGE } from "../safety";
 import { filterTools, McpClient, type McpToolInfo } from "./mcp";
+import { oauthAccessToken } from "./oauth";
+import { ghRest, githubUserToken } from "./github";
 
 export interface ToolContext {
   userId: string;
@@ -229,17 +231,115 @@ const generateImage: AgentTool = {
 export const BUILTIN_TOOLS: AgentTool[] = [webSearch, webFetch, generateImage];
 
 // ------------------------------------------------------------------ MCP servers
-export function mcpHeaders(s: { authHeader: string; authScheme: string; tokenEncrypted: string | null; extraHeaders: unknown }) {
+type ServerRow = Awaited<ReturnType<typeof prisma.mcpServer.findMany>>[number];
+
+/** Auth headers for a server: OAuth (auto-refresh), GitHub connection, or a static token (advanced fallback). */
+export async function serverHeaders(s: ServerRow, forceRefresh = false): Promise<Record<string, string>> {
   const h: Record<string, string> = { ...((s.extraHeaders && typeof s.extraHeaders === "object" ? s.extraHeaders : {}) as Record<string, string>) };
-  if (s.tokenEncrypted) {
-    const tok = decryptSecret(s.tokenEncrypted);
-    h[s.authHeader || "Authorization"] = s.authScheme ? `${s.authScheme} ${tok}` : tok;
+  let tok: string | null = null;
+  if (s.authType === "github") tok = await githubUserToken();
+  else if (s.authType === "oauth") tok = await oauthAccessToken(s, forceRefresh);
+  else if (s.tokenEncrypted) tok = decryptSecret(s.tokenEncrypted);
+  if (tok) {
+    const scheme = s.authType === "oauth" || s.authType === "github" ? "Bearer" : s.authScheme;
+    h[s.authType === "oauth" || s.authType === "github" ? "Authorization" : s.authHeader || "Authorization"] = scheme ? `${scheme} ${tok}` : tok;
   }
   return h;
 }
 
+/** Connects (refreshing an OAuth token once on 401). */
+export async function connectServer(s: ServerRow, signal?: AbortSignal, timeoutMs = 90_000) {
+  let c = new McpClient({ url: s.url, transport: s.transport, headers: await serverHeaders(s), signal, timeoutMs });
+  try {
+    await c.connect();
+  } catch (e) {
+    if (s.authType !== "oauth" || !/HTTP 401/.test((e as Error).message)) throw e;
+    c = new McpClient({ url: s.url, transport: s.transport, headers: await serverHeaders(s, true), signal, timeoutMs });
+    await c.connect();
+  }
+  return c;
+}
+
 function sanitize(name: string) {
   return name.replace(/[^a-zA-Z0-9_-]/g, "_");
+}
+
+function b64(s: string) {
+  return Buffer.from(s, "utf8").toString("base64");
+}
+
+/** REST fallback for GitHub if the MCP server is unreachable or rejects the token. */
+function githubRestTools(): AgentTool[] {
+  const T = async () => {
+    const t = await githubUserToken();
+    if (!t) throw new Error("GitHub غير مربوط");
+    return t;
+  };
+  const str = (v: unknown) => String(v ?? "").trim();
+  const mk = (name: string, label: string, description: string, properties: Record<string, unknown>, required: string[], fn: (a: Record<string, any>, tok: string) => Promise<unknown>): AgentTool => ({
+    name: `github__${name}`,
+    label: `GitHub · ${label}`,
+    description: `[GitHub] ${description}`,
+    parameters: { type: "object", properties, required },
+    async run(args) {
+      const out = await fn(args, await T());
+      const text = typeof out === "string" ? out : JSON.stringify(out, null, 1);
+      return { text: clip(text), summary: `${text.length.toLocaleString("en")} حرف` };
+    },
+  });
+  const repoP = { owner: { type: "string" }, repo: { type: "string" } };
+  return [
+    mk("get_me", "حسابي", "Get the authenticated GitHub user.", {}, [], async (_a, t) => {
+      const u = await ghRest(t, "GET", "/user");
+      return { login: u.login, name: u.name, html_url: u.html_url };
+    }),
+    mk("list_repos", "المستودعات", "List repositories the user can access (most recently updated first).", { per_page: { type: "integer" } }, [], async (a, t) => {
+      const r = await ghRest(t, "GET", `/user/repos?sort=updated&per_page=${Math.min(Number(a.per_page) || 50, 100)}`);
+      return r.map((x: any) => ({ full_name: x.full_name, private: x.private, default_branch: x.default_branch, description: x.description, html_url: x.html_url }));
+    }),
+    mk("get_file_contents", "قراءة ملف/مجلد", "Read a file (decoded text) or list a directory in a repo.", { ...repoP, path: { type: "string", description: "Path, empty for root" }, ref: { type: "string", description: "Branch/sha (optional)" } }, ["owner", "repo"], async (a, t) => {
+      const r = await ghRest(t, "GET", `/repos/${str(a.owner)}/${str(a.repo)}/contents/${str(a.path).replace(/^\/+/, "")}${a.ref ? `?ref=${encodeURIComponent(str(a.ref))}` : ""}`);
+      if (Array.isArray(r)) return r.map((x: any) => ({ type: x.type, path: x.path, size: x.size }));
+      return `path: ${r.path}\nsha: ${r.sha}\n\n${Buffer.from(r.content ?? "", "base64").toString("utf8")}`;
+    }),
+    mk("search_code", "بحث في الكود", "Search code on GitHub (GitHub code-search syntax, e.g. 'useState repo:owner/name').", { query: { type: "string" } }, ["query"], async (a, t) => {
+      const r = await ghRest(t, "GET", `/search/code?per_page=20&q=${encodeURIComponent(str(a.query))}`);
+      return (r.items ?? []).map((x: any) => ({ repo: x.repository?.full_name, path: x.path, url: x.html_url }));
+    }),
+    mk("create_branch", "فرع جديد", "Create a branch from another branch (default: the repo's default branch).", { ...repoP, branch: { type: "string" }, from_branch: { type: "string" } }, ["owner", "repo", "branch"], async (a, t) => {
+      const base = `/repos/${str(a.owner)}/${str(a.repo)}`;
+      const from = str(a.from_branch) || (await ghRest(t, "GET", base)).default_branch;
+      const ref = await ghRest(t, "GET", `${base}/git/ref/heads/${encodeURIComponent(from)}`);
+      const r = await ghRest(t, "POST", `${base}/git/refs`, { ref: `refs/heads/${str(a.branch)}`, sha: ref.object.sha });
+      return { ref: r.ref, sha: r.object?.sha };
+    }),
+    mk("create_or_update_file", "كتابة ملف (commit)", "Create or update one file with a commit on a branch. Pass the full new file content.", { ...repoP, path: { type: "string" }, content: { type: "string" }, message: { type: "string" }, branch: { type: "string" } }, ["owner", "repo", "path", "content", "message"], async (a, t) => {
+      const url = `/repos/${str(a.owner)}/${str(a.repo)}/contents/${str(a.path).replace(/^\/+/, "")}`;
+      let sha: string | undefined;
+      try {
+        sha = (await ghRest(t, "GET", `${url}${a.branch ? `?ref=${encodeURIComponent(str(a.branch))}` : ""}`)).sha;
+      } catch {}
+      const r = await ghRest(t, "PUT", url, { message: str(a.message), content: b64(String(a.content ?? "")), ...(a.branch ? { branch: str(a.branch) } : {}), ...(sha ? { sha } : {}) });
+      return { commit: r.commit?.sha, url: r.commit?.html_url, path: r.content?.path };
+    }),
+    mk("create_pull_request", "فتح PR", "Open a pull request.", { ...repoP, title: { type: "string" }, head: { type: "string" }, base: { type: "string" }, body: { type: "string" } }, ["owner", "repo", "title", "head"], async (a, t) => {
+      const base = str(a.base) || (await ghRest(t, "GET", `/repos/${str(a.owner)}/${str(a.repo)}`)).default_branch;
+      const r = await ghRest(t, "POST", `/repos/${str(a.owner)}/${str(a.repo)}/pulls`, { title: str(a.title), head: str(a.head), base, body: String(a.body ?? "") });
+      return { number: r.number, url: r.html_url };
+    }),
+    mk("list_issues", "القضايا", "List open issues and PRs of a repo.", { ...repoP, state: { type: "string" } }, ["owner", "repo"], async (a, t) => {
+      const r = await ghRest(t, "GET", `/repos/${str(a.owner)}/${str(a.repo)}/issues?per_page=30&state=${str(a.state) || "open"}`);
+      return r.map((x: any) => ({ number: x.number, title: x.title, state: x.state, pr: Boolean(x.pull_request), url: x.html_url }));
+    }),
+    mk("create_issue", "قضية جديدة", "Create an issue.", { ...repoP, title: { type: "string" }, body: { type: "string" } }, ["owner", "repo", "title"], async (a, t) => {
+      const r = await ghRest(t, "POST", `/repos/${str(a.owner)}/${str(a.repo)}/issues`, { title: str(a.title), body: String(a.body ?? "") });
+      return { number: r.number, url: r.html_url };
+    }),
+    mk("add_comment", "تعليق", "Comment on an issue or pull request.", { ...repoP, number: { type: "integer" }, body: { type: "string" } }, ["owner", "repo", "number", "body"], async (a, t) => {
+      const r = await ghRest(t, "POST", `/repos/${str(a.owner)}/${str(a.repo)}/issues/${Number(a.number)}/comments`, { body: String(a.body ?? "") });
+      return { url: r.html_url };
+    }),
+  ];
 }
 
 /** Builds agent tools for every enabled MCP server (from the cached tool list; refreshes servers that have none). */
@@ -250,23 +350,27 @@ export async function loadMcpTools(signal: AbortSignal): Promise<{ tools: AgentT
   const tools: AgentTool[] = [];
   const used = new Set(BUILTIN_TOOLS.map((t) => t.name));
 
-  async function client(s: (typeof servers)[number]) {
+  async function client(s: ServerRow) {
     let c = clients.get(s.id);
     if (!c) {
-      c = new McpClient({ url: s.url, transport: s.transport, headers: mcpHeaders(s), signal, timeoutMs: 90_000 });
-      await c.connect();
+      c = await connectServer(s, signal);
       clients.set(s.id, c);
     }
     return c;
   }
 
   for (const s of servers) {
+    if ((s.authType === "oauth" || s.authType === "github") && !s.connectedAt) continue; // not connected yet
     let list = (Array.isArray(s.tools) ? s.tools : []) as unknown as McpToolInfo[];
     if (!list.length) {
       try {
         list = await (await client(s)).listTools();
         await prisma.mcpServer.update({ where: { id: s.id }, data: { tools: list as any, lastSyncAt: new Date(), lastError: null } });
       } catch (e) {
+        if (s.authType === "github") {
+          tools.push(...githubRestTools().filter((t) => !used.has(t.name)));
+          continue;
+        }
         errors.push(`${s.name}: ${(e as Error).message}`);
         continue;
       }

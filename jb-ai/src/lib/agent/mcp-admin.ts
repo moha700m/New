@@ -1,14 +1,5 @@
 import { z } from "zod";
 
-export const GITHUB_MCP_PRESET = {
-  name: "GitHub",
-  slug: "github",
-  url: "https://api.githubcopilot.com/mcp/",
-  transport: "streamable",
-  authHeader: "Authorization",
-  authScheme: "Bearer",
-  extraHeaders: { "X-MCP-Toolsets": "context,repos,issues,pull_requests,users,actions" },
-};
 
 export const mcpSchema = z.object({
   name: z.string().trim().min(1).max(80),
@@ -28,8 +19,22 @@ export const mcpSchema = z.object({
 });
 
 /** Never send the encrypted token to the browser. */
-export function redactMcp<T extends { tokenEncrypted: string | null; tools: unknown }>(s: T) {
-  const { tokenEncrypted, tools, ...rest } = s;
+export function redactMcp<T extends { tokenEncrypted: string | null; tools: unknown; refreshTokenEncrypted?: string | null; oauthClientSecretEncrypted?: string | null; oauthConfig?: unknown }>(s: T) {
+  const { tokenEncrypted, tools, refreshTokenEncrypted, oauthClientSecretEncrypted, oauthConfig, ...rest } = s;
   const list = (Array.isArray(tools) ? tools : []) as { name: string; description?: string }[];
-  return { ...rest, hasToken: Boolean(tokenEncrypted), toolCount: list.length, tools: list.map((t) => ({ name: t.name, description: (t.description ?? "").slice(0, 200) })) };
+  const cfg = (oauthConfig ?? null) as { issuer?: string } | null;
+  return { ...rest, oauthIssuer: cfg?.issuer ?? null, hasToken: Boolean(tokenEncrypted), toolCount: list.length, tools: list.map((t) => ({ name: t.name, description: (t.description ?? "").slice(0, 200) })) };
 }
+
+/** Connector gallery (one-click "ربط"). Auth is auto-detected: OAuth 2.1 + dynamic registration, or none. */
+export const CONNECTOR_PRESETS = [
+  { key: "vercel", name: "Vercel", url: "https://mcp.vercel.com", desc: "مشاريعك ونشراتك وسجلاتها على Vercel" },
+  { key: "cloudflare", name: "Cloudflare", url: "https://bindings.mcp.cloudflare.com/mcp", desc: "Workers و KV و R2 و D1 في حسابك" },
+  { key: "notion", name: "Notion", url: "https://mcp.notion.com/mcp", desc: "صفحاتك وقواعد بياناتك في Notion" },
+  { key: "linear", name: "Linear", url: "https://mcp.linear.app/mcp", desc: "المهام والمشاريع في Linear" },
+  { key: "sentry", name: "Sentry", url: "https://mcp.sentry.dev/mcp", desc: "الأخطاء والتنبيهات في Sentry" },
+  { key: "stripe", name: "Stripe", url: "https://mcp.stripe.com", desc: "المدفوعات والعملاء في Stripe" },
+  { key: "huggingface", name: "Hugging Face", url: "https://huggingface.co/mcp", desc: "بحث النماذج والـ datasets والـ Spaces" },
+  { key: "deepwiki", name: "DeepWiki", url: "https://mcp.deepwiki.com/mcp", desc: "توثيق أي مستودع GitHub عام" },
+  { key: "context7", name: "Context7", url: "https://mcp.context7.com/mcp", desc: "توثيق محدّث للمكتبات البرمجية" },
+] as const;

@@ -398,9 +398,47 @@ model McpServer {
   extraHeaders   Json?
   enabled        Boolean   @default(true)
   toolFilter     String?   // optional comma list of tool names (supports * suffix) to expose; empty = all
+  authType       String    @default("none") // none | token | oauth | github
+  oauthConfig    Json?     // { issuer, authorization_endpoint, token_endpoint, registration_endpoint, client_id, resource, scope, token_endpoint_auth_method }
+  oauthClientSecretEncrypted String?
+  refreshTokenEncrypted      String?
+  tokenExpiresAt DateTime?
+  connectedAs    String?
+  connectedAt    DateTime?
   tools          Json?     // cached tools/list result
   lastSyncAt     DateTime?
   lastError      String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+}
+
+/// Short-lived OAuth state (PKCE verifier etc.), keyed by the random `state` parameter.
+model OAuthState {
+  id        String   @id // the state value
+  kind      String   // mcp | github_manifest | github_user
+  serverId  String?
+  data      Json
+  createdAt DateTime @default(now())
+}
+
+/// The owner's GitHub App (created via the manifest flow) + the connected user's tokens. Singleton row id="global".
+model GithubConnection {
+  id                    String    @id @default("global")
+  appId                 Int?
+  appSlug               String?
+  appName               String?
+  appHtmlUrl            String?
+  clientId              String?
+  clientSecretEncrypted String?
+  privateKeyEncrypted   String?
+  webhookSecretEncrypted String?
+  userTokenEncrypted    String?
+  refreshTokenEncrypted String?
+  tokenExpiresAt        DateTime?
+  refreshExpiresAt      DateTime?
+  login                 String?
+  avatarUrl             String?
+  connectedAt           DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 }
