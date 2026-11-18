@@ -4,6 +4,7 @@ import { AlertTriangle, Brain, Check, ChevronDown, Copy, FileText, Pencil, Refre
 import { useState } from "react";
 import { Markdown } from "./Markdown";
 import { LiveStatus, type UiLive } from "./LiveStatus";
+import { withMentionChips } from "./Mentions";
 
 export interface UiAttachment {
   id: string;
@@ -93,7 +94,7 @@ export function MessageView({ m, isLast, canAct, onRegenerate, onEdit }: { m: Ui
             </div>
           </div>
         ) : (
-          m.content && <div dir="auto" className="msg-text max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-ee-md bg-ink-700 px-4 py-2.5 text-[15px] leading-7">{m.content}</div>
+          m.content && <div dir="auto" className="msg-text max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-ee-md bg-ink-700 px-4 py-2.5 text-[15px] leading-7">{withMentionChips(m.content)}</div>
         )}
         {!editing && canAct && (
           <div className="mt-1 flex gap-1 opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100">

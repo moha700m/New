@@ -2,6 +2,7 @@
 import { ArrowUp, Bot, Check, FileText, Globe, ImageIcon, Lightbulb, Loader2, Paperclip, Plug, Plus, Square, X, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useToast } from "../ui/Toast";
+import { filterMentions, MentionChip, MentionPopover, type MentionItem } from "./Mentions";
 
 export interface PendingAttachment {
   id: string;
@@ -12,7 +13,10 @@ export interface PendingAttachment {
 }
 
 export function Composer(props: {
-  onSend: (text: string, attachments: PendingAttachment[]) => void;
+  onSend: (text: string, attachments: PendingAttachment[], opts?: { mentions: MentionItem[] }) => void;
+  /** @mention catalog (owner only); empty = mentions off */
+  mentionItems?: MentionItem[];
+  onMentionOpen?: () => void;
   onStop: () => void;
   streaming: boolean;
   disabled?: boolean;
@@ -48,6 +52,38 @@ export function Composer(props: {
   }, []);
   const [text, setText] = useState("");
   const [atts, setAtts] = useState<PendingAttachment[]>([]);
+  const [mentions, setMentions] = useState<MentionItem[]>([]);
+  // open @ autocomplete: the "@query" right before the caret
+  const [mq, setMq] = useState<{ start: number; query: string } | null>(null);
+  const [mActive, setMActive] = useState(0);
+  const mentionList = mq && props.mentionItems?.length ? filterMentions(props.mentionItems, mq.query).slice(0, 30) : [];
+  function detectMention(value: string, caret: number) {
+    if (!props.mentionItems?.length) return setMq(null);
+    const before = value.slice(0, caret);
+    const m = /(^|[\s(«"'،,])@([\p{L}\p{N}._-]{0,30})$/u.exec(before);
+    if (m) {
+      const start = caret - m[2]!.length - 1;
+      setMq((old) => {
+        if (!old) props.onMentionOpen?.();
+        return { start, query: m[2]! };
+      });
+      setMActive(0);
+    } else setMq(null);
+  }
+  function pickMention(it: MentionItem) {
+    const ta = taRef.current;
+    if (!mq) return;
+    const caret = ta?.selectionStart ?? text.length;
+    const next = (text.slice(0, mq.start) + text.slice(caret)).replace(/^\s+/, "");
+    setText(next);
+    setMentions((x) => (x.some((y) => y.key === it.key) ? x : [...x, it]));
+    setMq(null);
+    requestAnimationFrame(() => {
+      ta?.focus();
+      const pos = Math.min(mq.start, next.length);
+      ta?.setSelectionRange(pos, pos);
+    });
+  }
   const [uploading, setUploading] = useState(0);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -84,20 +120,32 @@ export function Composer(props: {
   function submit() {
     if (props.streaming || uploading) return;
     if (!text.trim() && !atts.length) return;
-    props.onSend(text.trim(), atts);
+    // mentions travel in the text as "@Token" (kept on regenerate / edit; the server reads them from there)
+    const tokens = mentions.map((m) => `@${m.token}`).filter((t) => !text.includes(t));
+    props.onSend([tokens.join(" "), text.trim()].filter(Boolean).join(" "), atts, { mentions });
     setText("");
     setAtts([]);
+    setMentions([]);
+    setMq(null);
   }
 
   return (
     <div
-      className="rounded-2xl border border-ink-500/70 bg-ink-850/90 shadow-[0_0_0_1px_rgba(91,140,255,0.06),0_10px_40px_-10px_rgba(0,0,0,0.6)] backdrop-blur focus-within:border-brand-500/60"
+      className="relative rounded-2xl border border-ink-500/70 bg-ink-850/90 shadow-[0_0_0_1px_rgba(91,140,255,0.06),0_10px_40px_-10px_rgba(0,0,0,0.6)] backdrop-blur focus-within:border-brand-500/60"
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         e.preventDefault();
         if (e.dataTransfer.files.length) void upload(e.dataTransfer.files);
       }}
     >
+      {mq && props.mentionItems?.length ? <MentionPopover items={mentionList} active={mActive} query={mq.query} onHover={setMActive} onPick={pickMention} /> : null}
+      {mentions.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 px-3 pt-3" data-testid="mention-chips">
+          {mentions.map((m) => (
+            <MentionChip key={m.key} it={m} onRemove={() => setMentions((x) => x.filter((y) => y.key !== m.key))} />
+          ))}
+        </div>
+      )}
       {atts.length > 0 && (
         <div className="flex flex-wrap gap-2 px-3 pt-3">
           {atts.map((a) => (
@@ -117,7 +165,12 @@ export function Composer(props: {
         value={text}
         autoFocus={props.autoFocus}
         disabled={props.disabled}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => {
+          setText(e.target.value);
+          detectMention(e.target.value, e.target.selectionStart ?? e.target.value.length);
+        }}
+        onSelect={(e) => mq && detectMention(e.currentTarget.value, e.currentTarget.selectionStart ?? 0)}
+        onBlur={() => setTimeout(() => setMq(null), 150)}
         onPaste={(e) => {
           const files = Array.from(e.clipboardData.files);
           if (files.length) {
@@ -126,12 +179,33 @@ export function Composer(props: {
           }
         }}
         onKeyDown={(e) => {
+          if (mq && mentionList.length) {
+            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+              e.preventDefault();
+              setMActive((i) => (i + (e.key === "ArrowDown" ? 1 : mentionList.length - 1)) % mentionList.length);
+              return;
+            }
+            if ((e.key === "Enter" || e.key === "Tab") && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              pickMention(mentionList[mActive] ?? mentionList[0]!);
+              return;
+            }
+          }
+          if (mq && e.key === "Escape") {
+            e.preventDefault();
+            setMq(null);
+            return;
+          }
+          if (e.key === "Backspace" && !text && mentions.length) {
+            setMentions((x) => x.slice(0, -1));
+            return;
+          }
           if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
             e.preventDefault();
             submit();
           }
         }}
-        placeholder={props.placeholder ?? "اسأل أي شيء"}
+        placeholder={props.placeholder ?? (props.mentionItems?.length ? "اسأل أي شيء — اكتب @ لأداة أو مكان نشر" : "اسأل أي شيء")}
         dir="auto"
         className="block max-h-60 w-full resize-none bg-transparent px-4 pb-1 pt-3.5 text-[15px] text-slate-100 outline-none placeholder:text-slate-500"
         data-testid="composer-input"

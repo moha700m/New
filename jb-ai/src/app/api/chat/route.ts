@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { resolveMentions } from "@/lib/mentions";
+import { CONNECTOR_PRESETS } from "@/lib/agent/mcp-admin";
 import { after } from "next/server";
 import { ChatJob } from "@/lib/chat-jobs";
 import { needsVerification, requireUser } from "@/lib/auth";
@@ -40,6 +42,9 @@ export async function POST(req: Request) {
     if (await needsVerification(user)) throw new HttpError(403, "يرجى تأكيد بريدك الإلكتروني قبل بدء المحادثة.", "email_unverified");
     input = await parseBody(req, schema);
     if (!isOwnerAccount(user)) await rateLimit(`chat:${user.id}`, settings.chatRateLimitPerMinute, 60_000);
+    const canAgent = isOwnerAccount(user) || user.role === "ADMIN" || user.role === "OWNER";
+    // an @mention of a tool / deploy target / connector switches agent mode on by itself
+    if (!input.agent && canAgent && resolveMentions(input.content, CONNECTOR_PRESETS.map((p) => ({ slug: p.key, name: p.name }))).length) input.agent = true;
     if (input.agent && !isOwnerAccount(user) && user.role !== "ADMIN" && user.role !== "OWNER") throw new HttpError(403, "وضع الوكيل متاح للمالك فقط.", "agent_owner_only");
     const { plan } = await getUserPlan(user.id);
     prep = await prepareChat(user.id, plan, input, settings);

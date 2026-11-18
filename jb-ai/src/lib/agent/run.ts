@@ -1,4 +1,6 @@
 import "server-only";
+import { resolveMentions } from "../mentions";
+import { CONNECTOR_PRESETS } from "./mcp-admin";
 import type { AiModel, Provider } from "@prisma/client";
 import { prisma } from "../db";
 import { getAdapter, OpenAICompatibleAdapter, ProviderError, type ChatMessageInput } from "../providers";
@@ -220,6 +222,46 @@ export async function runAgent(opts: {
   const groups = mcp.groups;
   for (const g of groups) if (g.core) g.tools.forEach((t) => active.add(t.name));
   for (const g of groups) if (!g.core && (mentioned(g) || g.tools.length <= 6) && active.size + Math.min(g.tools.length, 30) <= MAX_ACTIVE) activate(g);
+  // @mentions: the user picked exact tools / deploy targets — force them in and tell the model to use exactly those.
+  const lastUserRaw = [...opts.contextMessages].reverse().find((m) => m.role === "user")?.content ?? "";
+  const mentions = resolveMentions(
+    lastUserRaw,
+    groups.map((g) => ({ slug: g.slug, name: g.name })),
+  );
+  // a mention of a connector that exists in admin but failed to load / isn't connected
+  const knownSlugs = new Set(groups.map((g) => g.slug));
+  const missingMentions: string[] = [];
+  for (const m of mentions) {
+    if (m.kind === "connector") {
+      const g = groups.find((x) => x.slug === m.key)!;
+      if (!g.core) g.tools.slice(0, 40).forEach((t) => active.add(t.name));
+    } else if (m.needs && !knownSlugs.has(m.needs)) missingMentions.push(m.label);
+  }
+  for (const p of resolveMentions(lastUserRaw, CONNECTOR_PRESETS.map((x) => ({ slug: x.key, name: x.name })))) {
+    if (p.kind === "connector" && !knownSlugs.has(p.key)) missingMentions.push(p.label);
+  }
+  const mentionNote = mentions.length
+    ? [
+        "",
+        `THE USER @MENTIONED THESE TARGETS — use exactly them: ${mentions.map((m) => `@${m.token}`).join(", ")}.`,
+        mentions.some((m) => m.kind === "deploy" || m.kind === "connector")
+          ? [
+              "Deploy/publish ONLY to the mentioned target(s):",
+              mentions.some((m) => m.key === "site") ? "• @موقعي → publish_site (instant link on this site)." : "• Do NOT use publish_site (the user did not ask for the built-in hosting).",
+              mentions.some((m) => m.key === "github") ? "• @GitHub → github__create_repo (public) → github__push_files (workspace) → github__enable_pages, then check_url the github.io link (Pages can take ~1 min: retry) and give the repo + live link." : "",
+              mentions.some((m) => m.key === "vercel") ? "• @Vercel → push to GitHub (create_repo + push_files) then github__deploy_links and give the Vercel import link (one tap)." : "",
+              ...mentions.filter((m) => m.kind === "connector").map((m) => `• @${m.token} → use the ${m.label} connector tools (${m.key}__*) for this; if a needed tool isn't loaded call use_connector {connector:"${m.key}"} with a filter.`),
+            ]
+              .filter(Boolean)
+              .join("\n")
+          : "",
+        mentions.some((m) => m.key === "search") ? "• @بحث → research with web_search / web_fetch first." : "",
+        mentions.some((m) => m.key === "image") ? "• @صورة → create the images with generate_image." : "",
+        missingMentions.length ? `NOT CONNECTED: ${missingMentions.join(", ")} — don't fake it: tell the user (in Arabic) to tap «ربط» for it in the connectors menu (🔌), and stop.` : "",
+      ]
+        .filter(Boolean)
+        .join("\n")
+    : "";
   const lazyGroups = () => groups.filter((g) => !g.core && g.tools.some((t) => !active.has(t.name)));
   const useConnector: AgentTool = {
     name: "use_connector",
@@ -341,7 +383,7 @@ export async function runAgent(opts: {
     }
   }
   const STEP_MS = 120_000;
-  const sysFor = () => systemPrompt(activeTools(), mcp.errors, lazyGroups());
+  const sysFor = () => systemPrompt(activeTools(), mcp.errors, lazyGroups()) + mentionNote;
   const sys = sysFor();
   const maxTokens = model.maxOutputTokens ? Math.min(model.maxOutputTokens, 16384) : 8192;
   const ctxMsgs = model.supportsVision ? opts.contextMessages : opts.contextMessages.map((m) => ({ ...m, images: undefined }));

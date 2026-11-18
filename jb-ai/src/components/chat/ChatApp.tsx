@@ -11,6 +11,7 @@ import { MessageView, type UiMessage } from "./MessageView";
 import { ModelPicker } from "./ModelPicker";
 import { ConnectorsSheet } from "./ConnectorsSheet";
 import { SpendMeter } from "./SpendMeter";
+import { useMentionCatalog, type MentionItem } from "./Mentions";
 import { Sidebar, type ConvItem, type MeInfo } from "./Sidebar";
 
 const MODEL_KEY = "jb.selectedModel";
@@ -120,6 +121,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const agentOn = agent && agentAvailable;
+  const mentionCatalog = useMentionCatalog(isAdmin);
 
   // ---- conversation loading
   const openConversation = useCallback(
@@ -377,8 +379,20 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
     router.push("/register");
   }
 
-  async function send(text: string, atts: PendingAttachment[]) {
+  async function send(text: string, atts: PendingAttachment[], opts?: { mentions: MentionItem[] }) {
     if (!signedIn) return requireAuth();
+    // an @mention means "use this tool / deploy here": run as the agent, on the tested agent model if needed
+    let modelId = selectedModel;
+    let useAgent = agentOn;
+    if (opts?.mentions.length && agentAvailable && !agentOn) {
+      useAgent = true;
+      setAgent(true);
+      const agentModel = config?.defaults.agent;
+      if (agentModel && !AGENT_CHAIN.includes(current?.name ?? "")) {
+        modelId = agentModel;
+        setSelectedModel(agentModel);
+      }
+    }
     if (me?.user?.mustVerify) return toast("يرجى تأكيد بريدك الإلكتروني أولًا.", "err");
     const tempId = `pending-assistant-${Date.now()}`;
     setMessages((list) => [
@@ -386,7 +400,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
       { id: "pending-user", role: "user", content: text, status: "complete", attachments: atts.map((a) => ({ ...a })) },
       { id: tempId, role: "assistant", content: "", status: "streaming" },
     ]);
-    await runChat({ conversationId: activeIdRef.current, content: text, attachmentIds: atts.map((a) => a.id), modelId: selectedModel, think, webSearch: search && searchAvailable && !searchLocked, agent: agentOn }, tempId);
+    await runChat({ conversationId: activeIdRef.current, content: text, attachmentIds: atts.map((a) => a.id), modelId, think, webSearch: search && searchAvailable && !searchLocked, agent: useAgent }, tempId);
   }
 
   async function regenerate() {
@@ -466,6 +480,8 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
   const composer = (
     <Composer
       onSend={send}
+      mentionItems={isAdmin && agentAvailable ? mentionCatalog.items : undefined}
+      onMentionOpen={() => void mentionCatalog.reload()}
       onStop={() => void stopRun()}
       streaming={streaming}
       think={think}
@@ -477,7 +493,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
       searchLocked={searchLocked}
       uploadsAllowed={me?.plan?.allowUploads ?? false}
       onRequireAuth={signedIn ? undefined : requireAuth}
-      placeholder={current?.capabilities.imageGeneration ? `صِف الصورة التي تريد إنشاءها (${current.name})` : agentOn ? "وش المهمة؟ الوكيل يستخدم GitHub و MCP والويب والصور" : "اسأل أي شيء"}
+      placeholder={current?.capabilities.imageGeneration ? `صِف الصورة التي تريد إنشاءها (${current.name})` : agentOn ? "وش المهمة؟ اكتب @ لتختار أداة أو مكان النشر" : isAdmin ? "اسأل أي شيء — اكتب @ لأداة أو مكان نشر" : "اسأل أي شيء"}
       imageMode={Boolean(current?.capabilities.imageGeneration)}
       agent={agentOn}
       setAgent={
