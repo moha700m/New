@@ -1,4 +1,5 @@
-import { isPrivateMode } from "@/lib/access";
+import { isPrivateMode, ownerSignupOpen } from "@/lib/access";
+import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { SERVERLESS } from "@/lib/config-bus";
 import { getPublicCatalog } from "@/lib/engine";
@@ -19,6 +20,7 @@ export const GET = handler(async () => {
       planKey,
       live: SERVERLESS ? { mode: "poll", intervalMs: 5000 } : { mode: "sse", intervalMs: 30000 },
       private: isPrivateMode(),
+      ownerSignupOpen: isPrivateMode() && !user ? await ownerSignupOpen((emails) => prisma.user.count({ where: { email: { in: emails } } })) : false,
       defaults: isPrivateMode() && !user ? { text: null, reasoning: null, code: null, vision: null, image: null } : catalog.defaults,
       models: (isPrivateMode() && !user ? [] : catalog.models).map((m) => ({ ...m, allowed: planKey ? m.plans.includes(planKey) : false })),
     },

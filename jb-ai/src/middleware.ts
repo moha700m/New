@@ -2,8 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isPrivateMode } from "./lib/access";
 
 /** Reachable without a session while the site is private (everything else needs the owner to be signed in). */
-const PUBLIC_PAGES = ["/login", "/forgot-password", "/reset-password", "/verify-email"];
-const PUBLIC_API = ["/api/auth/login", "/api/auth/logout", "/api/auth/me", "/api/auth/forgot", "/api/auth/reset", "/api/auth/verify", "/api/health", "/api/config", "/api/webhooks/"];
+const PUBLIC_PAGES = ["/register", "/login", "/forgot-password", "/reset-password", "/verify-email"];
+const PUBLIC_API = ["/api/auth/register", "/api/auth/login", "/api/auth/logout", "/api/auth/me", "/api/auth/forgot", "/api/auth/reset", "/api/auth/verify", "/api/health", "/api/config", "/api/webhooks/"];
 const isPublic = (path: string, list: string[]) => list.some((p) => path === p || (p.endsWith("/") ? path.startsWith(p) : path.startsWith(`${p}/`)));
 
 /**
@@ -27,7 +27,6 @@ export function middleware(req: NextRequest) {
   }
   const hasSession = Boolean(req.cookies.get("jb_session"));
   if (isPrivateMode()) {
-    if (pathname === "/register" || pathname.startsWith("/register/")) return NextResponse.redirect(new URL("/login", req.url));
     if (pathname.startsWith("/api/")) {
       if (!hasSession && !isPublic(pathname, PUBLIC_API)) return NextResponse.json({ error: "الموقع خاص — يجب تسجيل الدخول", code: "unauthenticated" }, { status: 401 });
     } else if (!hasSession && !isPublic(pathname, PUBLIC_PAGES)) {

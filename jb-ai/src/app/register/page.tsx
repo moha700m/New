@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/components/api";
 import { AuthShell, FormError } from "@/components/auth/AuthShell";
 
@@ -10,8 +10,25 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState<"loading" | "open" | "owner">("loading");
+  useEffect(() => {
+    fetch("/api/config", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((c) => {
+        if (c?.site?.registrationOpen) setMode("open");
+        else if (c?.ownerSignupOpen) setMode("owner");
+        else window.location.replace("/login");
+      })
+      .catch(() => setMode("open"));
+  }, []);
+  if (mode === "loading") return null;
+  const owner = mode === "owner";
   return (
-    <AuthShell title="أنشئ حسابك" subtitle="مجاني دائمًا، ويمكنك الترقية في أي وقت." footer={<>لديك حساب؟ <Link href="/login" className="text-brand-400">تسجيل الدخول</Link></>}>
+    <AuthShell
+      title={owner ? "إنشاء حساب المالك" : "أنشئ حسابك"}
+      subtitle={owner ? "الموقع خاص. التسجيل متاح لبريد المالك فقط، ويُقفل تلقائيًا بعد إنشاء الحساب." : "مجاني دائمًا، ويمكنك الترقية في أي وقت."}
+      footer={<>لديك حساب؟ <Link href="/login" className="text-brand-400">تسجيل الدخول</Link></>}
+    >
       <form
         className="space-y-4"
         onSubmit={async (e) => {
@@ -41,7 +58,7 @@ export default function RegisterPage() {
           <input id="password" dir="ltr" className="input text-start" type="password" autoComplete="new-password" minLength={8} required value={password} onChange={(e) => setPassword(e.target.value)} />
           <p className="mt-1 text-xs text-slate-500">٨ أحرف على الأقل.</p>
         </div>
-        <button className="btn-primary w-full" disabled={busy}>{busy ? "جارٍ إنشاء الحساب…" : "سجّل مجانًا"}</button>
+        <button className="btn-primary w-full" disabled={busy}>{busy ? "جارٍ إنشاء الحساب…" : owner ? "إنشاء الحساب" : "سجّل مجانًا"}</button>
       </form>
     </AuthShell>
   );

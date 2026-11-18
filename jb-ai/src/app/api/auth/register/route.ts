@@ -14,9 +14,13 @@ const schema = z.object({
 });
 
 export const POST = handler(async (req: Request) => {
-  if (isPrivateMode()) throw new HttpError(403, "التسجيل مغلق — الموقع خاص حاليًا.", "registration_closed");
   await rateLimit(`register:${clientIp(req)}`, 10, 3600_000);
   const body = await parseBody(req, schema);
+  if (isPrivateMode()) {
+    // Private: only the owner email may sign up, and only if that account doesn't exist yet.
+    const taken = await prisma.user.findUnique({ where: { email: body.email }, select: { id: true } });
+    if (!ownerEmailMatches(body.email) || taken) throw new HttpError(403, "التسجيل مغلق — الموقع خاص حاليًا.", "registration_closed");
+  }
   const settings = await getSettings();
   const isOwner = ownerEmailMatches(body.email);
   if (!settings.registrationOpen && !isOwner) throw new HttpError(403, "التسجيل مغلق حاليًا");
