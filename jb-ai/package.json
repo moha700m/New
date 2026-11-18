@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "start:prod": "prisma migrate deploy && tsx prisma/seed.ts && next start -p ${PORT:-3000}",
+    "test:e2e": "node scripts/e2e.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -47,5 +49,8 @@
     "tailwindcss": "^3.4.18",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=20.11"
   }
 }

@@ -21,7 +21,6 @@ const securityHeaders = [
   },
 ];
 const nextConfig = {
-  output: "standalone",
   poweredByHeader: false,
   serverExternalPackages: ["pg", "bcryptjs", "nodemailer"],
   async headers() {
