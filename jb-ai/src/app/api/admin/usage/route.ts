@@ -1,5 +1,6 @@
 import { adminRoute } from "@/lib/admin";
-import { prisma } from "@/lib/db";
+import { Prisma } from "@prisma/client";
+import { DB_SCHEMA, prisma } from "@/lib/db";
 import { json } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +13,7 @@ export const GET = adminRoute(async ({ req }) => {
       SELECT date_trunc('day', "createdAt") AS day, count(*) AS requests,
              count(*) FILTER (WHERE status = 'error') AS errors,
              sum("totalTokens") AS tokens, sum("costUsd") AS cost
-      FROM "UsageRecord" WHERE "createdAt" >= ${since} GROUP BY 1 ORDER BY 1`,
+      FROM ${Prisma.raw(`"${DB_SCHEMA.replace(/"/g, "")}"."UsageRecord"`)} WHERE "createdAt" >= ${since} GROUP BY 1 ORDER BY 1`,
     prisma.usageRecord.groupBy({ by: ["modelKey"], where: { createdAt: { gte: since } }, _count: true, _sum: { totalTokens: true, costUsd: true, promptTokens: true, completionTokens: true }, orderBy: { _count: { modelKey: "desc" } }, take: 30 }),
     prisma.usageRecord.groupBy({ by: ["providerId"], where: { createdAt: { gte: since } }, _count: true, _sum: { totalTokens: true, costUsd: true }, _avg: { latencyMs: true } }),
     prisma.usageRecord.findMany({ where: { createdAt: { gte: since }, status: "error" }, orderBy: { createdAt: "desc" }, take: 50, select: { id: true, createdAt: true, modelKey: true, errorMessage: true, usedFallback: true, kind: true, provider: { select: { name: true } }, user: { select: { email: true } } } }),
