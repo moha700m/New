@@ -14,6 +14,9 @@ export async function resolveServer(q: { serverId?: string | null; preset?: stri
   if (q.preset) {
     const p = CONNECTOR_PRESETS.find((x) => x.key === q.preset);
     if (!p) throw new Error("الموصّل غير معروف");
+    // A row that is already connected keeps its URL: its tokens belong to that server's OAuth issuer.
+    const existing = await prisma.mcpServer.findUnique({ where: { slug: p.key } });
+    if (existing?.connectedAt && existing.tokenEncrypted && existing.url !== p.url) return existing;
     return prisma.mcpServer.upsert({
       where: { slug: p.key },
       create: { slug: p.key, name: p.name, url: p.url, transport: "streamable" },

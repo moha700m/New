@@ -232,7 +232,7 @@ export async function oauthAccessToken(server: McpServer, force = false): Promis
       const updated = await prisma.mcpServer.update({ where: { id: server.id }, data: tokenData(t, server.refreshTokenEncrypted) });
       return decryptSecret(updated.tokenEncrypted!);
     } catch (e) {
-      await prisma.mcpServer.update({ where: { id: server.id }, data: { lastError: `تجديد التوكن فشل: ${(e as Error).message}`.slice(0, 500) } }).catch(() => {});
+      await prisma.mcpServer.update({ where: { id: server.id }, data: { lastError: `انتهى الربط — اضغط «ربط» مرة ثانية (${(e as Error).message})`.slice(0, 500), ...(soon ? { connectedAt: null } : {}) } }).catch(() => {});
       if (soon) return null;
     }
   }
