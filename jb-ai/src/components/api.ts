@@ -21,13 +21,16 @@ export async function api<T = any>(path: string, opts: { method?: string; body?:
   } catch {
     data = { error: text };
   }
-  if (!res.ok) throw new ApiError(data?.error || `Request failed (${res.status})`, res.status, data?.code);
+  if (!res.ok) throw new ApiError(data?.error || `تعذّر الطلب (${res.status})`, res.status, data?.code);
   return data as T;
 }
 
+/** Arabic UI with Western digits and the Gregorian calendar (common in Saudi product UIs). */
+export const LOCALE = "ar-SA-u-ca-gregory-nu-latn";
+
 export function fmtNum(n: number | null | undefined) {
   if (n == null) return "—";
-  return new Intl.NumberFormat("en-US").format(n);
+  return new Intl.NumberFormat(LOCALE).format(n);
 }
 export function fmtUsd(n: number | null | undefined, digits = 4) {
   if (n == null) return "—";
@@ -36,8 +39,8 @@ export function fmtUsd(n: number | null | undefined, digits = 4) {
 export function fmtDate(d: string | Date | null | undefined, withTime = false) {
   if (!d) return "—";
   const dt = new Date(d);
-  return withTime ? dt.toLocaleString() : dt.toLocaleDateString();
+  return withTime ? dt.toLocaleString(LOCALE, { dateStyle: "medium", timeStyle: "short" }) : dt.toLocaleDateString(LOCALE, { dateStyle: "medium" });
 }
 export function money(cents: number, currency = "usd") {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: currency.toUpperCase() }).format(cents / 100);
+  return new Intl.NumberFormat(LOCALE, { style: "currency", currency: currency.toUpperCase() }).format(cents / 100);
 }

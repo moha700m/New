@@ -10,7 +10,7 @@ function ResetForm() {
   const [password, setPassword] = useState("");
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  if (done) return <p className="text-sm text-slate-300">Password updated. <Link href="/login" className="text-brand-400">Log in</Link> with your new password.</p>;
+  if (done) return <p className="text-sm text-slate-300">تم تحديث كلمة المرور. <Link href="/login" className="text-brand-400">سجّل دخولك</Link> بكلمة المرور الجديدة.</p>;
   return (
     <form
       className="space-y-4"
@@ -27,17 +27,17 @@ function ResetForm() {
     >
       <FormError error={error} />
       <div>
-        <label className="label" htmlFor="pw">New password</label>
-        <input id="pw" className="input" type="password" minLength={8} required autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+        <label className="label" htmlFor="pw">كلمة المرور الجديدة</label>
+        <input id="pw" dir="ltr" className="input text-start" type="password" minLength={8} required autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
       </div>
-      <button className="btn-primary w-full" disabled={!token}>Set new password</button>
+      <button className="btn-primary w-full" disabled={!token}>تعيين كلمة المرور</button>
     </form>
   );
 }
 
 export default function ResetPage() {
   return (
-    <AuthShell title="Choose a new password">
+    <AuthShell title="اختر كلمة مرور جديدة">
       <Suspense>
         <ResetForm />
       </Suspense>

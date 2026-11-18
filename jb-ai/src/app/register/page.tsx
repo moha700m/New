@@ -11,7 +11,7 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   return (
-    <AuthShell title="Create your account" subtitle="Free forever. Upgrade any time." footer={<>Already have an account? <Link href="/login" className="text-brand-400">Log in</Link></>}>
+    <AuthShell title="أنشئ حسابك" subtitle="مجاني دائمًا، ويمكنك الترقية في أي وقت." footer={<>لديك حساب؟ <Link href="/login" className="text-brand-400">تسجيل الدخول</Link></>}>
       <form
         className="space-y-4"
         onSubmit={async (e) => {
@@ -29,19 +29,19 @@ export default function RegisterPage() {
       >
         <FormError error={error} />
         <div>
-          <label className="label" htmlFor="name">Name (optional)</label>
+          <label className="label" htmlFor="name">الاسم (اختياري)</label>
           <input id="name" className="input" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         <div>
-          <label className="label" htmlFor="email">Email</label>
-          <input id="email" className="input" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+          <label className="label" htmlFor="email">البريد الإلكتروني</label>
+          <input id="email" dir="ltr" className="input text-start" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
         <div>
-          <label className="label" htmlFor="password">Password</label>
-          <input id="password" className="input" type="password" autoComplete="new-password" minLength={8} required value={password} onChange={(e) => setPassword(e.target.value)} />
-          <p className="mt-1 text-xs text-slate-500">At least 8 characters.</p>
+          <label className="label" htmlFor="password">كلمة المرور</label>
+          <input id="password" dir="ltr" className="input text-start" type="password" autoComplete="new-password" minLength={8} required value={password} onChange={(e) => setPassword(e.target.value)} />
+          <p className="mt-1 text-xs text-slate-500">٨ أحرف على الأقل.</p>
         </div>
-        <button className="btn-primary w-full" disabled={busy}>{busy ? "Creating account…" : "Sign up free"}</button>
+        <button className="btn-primary w-full" disabled={busy}>{busy ? "جارٍ إنشاء الحساب…" : "سجّل مجانًا"}</button>
       </form>
     </AuthShell>
   );

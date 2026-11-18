@@ -10,8 +10,8 @@ export * from "./types";
 
 export const PROVIDER_TYPES = [
   { type: "VENICE", label: "Venice AI", defaultBaseUrl: "https://api.venice.ai/api/v1", authHeader: "Authorization", authScheme: "Bearer" },
-  { type: "OPENAI_COMPATIBLE", label: "OpenAI-compatible (OpenAI, OpenRouter, Groq, Together, vLLM, Ollama…)", defaultBaseUrl: "https://api.openai.com/v1", authHeader: "Authorization", authScheme: "Bearer" },
-  { type: "ANTHROPIC", label: "Anthropic (native Messages API)", defaultBaseUrl: "https://api.anthropic.com/v1", authHeader: "x-api-key", authScheme: "" },
+  { type: "OPENAI_COMPATIBLE", label: "متوافق مع OpenAI (OpenAI و OpenRouter و Groq و Together و vLLM و Ollama…)", defaultBaseUrl: "https://api.openai.com/v1", authHeader: "Authorization", authScheme: "Bearer" },
+  { type: "ANTHROPIC", label: "Anthropic (واجهة Messages الأصلية)", defaultBaseUrl: "https://api.anthropic.com/v1", authHeader: "x-api-key", authScheme: "" },
 ] as const;
 
 export function runtimeConfig(p: Provider): ProviderRuntimeConfig {

@@ -1,4 +1,5 @@
 import { getCurrentUser } from "@/lib/auth";
+import { SERVERLESS } from "@/lib/config-bus";
 import { getPublicCatalog } from "@/lib/engine";
 import { handler, json } from "@/lib/http";
 import { getUserPlan } from "@/lib/plans";
@@ -15,6 +16,7 @@ export const GET = handler(async () => {
       version: catalog.version,
       site: { name: settings.siteName, tagline: settings.tagline, maintenanceMode: settings.maintenanceMode, registrationOpen: settings.registrationOpen },
       planKey,
+      live: SERVERLESS ? { mode: "poll", intervalMs: 5000 } : { mode: "sse", intervalMs: 30000 },
       defaults: catalog.defaults,
       models: catalog.models.map((m) => ({ ...m, allowed: planKey ? m.plans.includes(planKey) : false })),
     },

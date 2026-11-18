@@ -12,7 +12,7 @@ export function Logo({ name = "JB AI", size = 28 }: { name?: string; size?: numb
         <path d="M12 9v9.5a3.5 3.5 0 0 1-6 2.4" fill="none" stroke="url(#jbg)" strokeWidth="2.6" strokeLinecap="round" />
         <path d="M16 9h5a3.2 3.2 0 0 1 0 6.4h-5h5.6a3.3 3.3 0 0 1 0 6.6H16z" fill="none" stroke="url(#jbg)" strokeWidth="2.4" strokeLinejoin="round" />
       </svg>
-      <span className="text-[17px] font-semibold tracking-tight">{name}</span>
+      <span className="text-[17px] font-semibold">{name}</span>
     </span>
   );
 }

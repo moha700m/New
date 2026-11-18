@@ -5,7 +5,7 @@ import { getAdapter } from "@/lib/providers";
 
 export const POST = adminRoute<{ id: string }>(async ({ params, log }) => {
   const p = await prisma.provider.findUnique({ where: { id: params.id } });
-  if (!p) throw new HttpError(404, "Provider not found");
+  if (!p) throw new HttpError(404, "المزوّد غير موجود");
   const result = await getAdapter(p).testConnection();
   await prisma.provider.update({
     where: { id: p.id },

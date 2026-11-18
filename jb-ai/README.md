@@ -1,6 +1,6 @@
 # JB AI
 
-An AskAnything-style AI chat platform with an owner-controlled **Engine Management Center**: providers, credentials, models, routing, fallback and plan access are all configured from the admin dashboard and propagate live to customers — no code edits or redeploys.
+An Arabic (RTL), AskAnything-style AI chat platform with an owner-controlled **Engine Management Center**: providers, credentials, models, routing, fallback and plan access are all configured from the admin dashboard and propagate live to customers — no code edits or redeploys.
 
 ## Stack
 
@@ -43,8 +43,15 @@ npm run build && npm start &
 OWNER_EMAIL=owner@example.com npm run test:e2e   # 43 end-to-end checks against real providers
 ```
 
-## Deploy (Render)
+## Deploy (Vercel)
 
-`render.yaml` defines a Node web service + managed PostgreSQL (paid DB plans include daily backups). Required env: `DATABASE_URL`, `MASTER_ENCRYPTION_KEY`, `APP_URL`, `OWNER_EMAIL`. Optional: `SMTP_URL`, `MAIL_FROM`, `STRIPE_*`. Start command runs migrations and the idempotent seed before `next start`. Health check: `/api/health`.
+The site is Arabic-first (RTL, IBM Plex Sans Arabic). On Vercel (`VERCEL` env is set automatically) the app switches to serverless mode: live config uses lightweight polling of `/api/config/version` instead of SSE/LISTEN, rate limits are stored in Postgres, and uploads are capped at 4 MB (Vercel's request body limit).
+
+1. Import the repo in Vercel with **Root Directory = `jb-ai`** (`vercel.json` sets install/build commands).
+2. **Storage → Create → Neon (Postgres)** and connect it to the project. This sets `DATABASE_URL` and `DATABASE_URL_UNPOOLED`.
+3. Environment variables: `MASTER_ENCRYPTION_KEY` (32 random bytes, base64), `APP_URL`, `OWNER_EMAIL`; optional `SMTP_URL`, `MAIL_FROM`, `STRIPE_*`.
+4. Redeploy. `scripts/vercel-build.sh` runs `prisma migrate deploy` and the idempotent seed before `next build`.
+
+Note: Vercel's Hobby plan is for non-commercial use; a site that takes payments needs the Pro plan.
 
 Stripe webhook endpoint: `https://<your-domain>/api/webhooks/stripe` — events `checkout.session.completed`, `customer.subscription.created|updated|deleted`, `invoice.paid`, `invoice.payment_failed`.

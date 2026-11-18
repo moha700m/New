@@ -8,7 +8,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 async function own(userId: string, id: string) {
   const c = await prisma.conversation.findFirst({ where: { id, userId } });
-  if (!c) throw new HttpError(404, "Conversation not found");
+  if (!c) throw new HttpError(404, "المحادثة غير موجودة");
   return c;
 }
 

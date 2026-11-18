@@ -1,6 +1,6 @@
 import "server-only";
 import type { AiModel, ModelCategory, Plan, Provider, RoutingConfig } from "@prisma/client";
-import { bumpConfigVersion, currentVersion, ensureBusStarted, readVersion, registerInvalidator } from "./config-bus";
+import { bumpConfigVersion, freshVersion, registerInvalidator } from "./config-bus";
 import { prisma } from "./db";
 import { HttpError } from "./http";
 import { getAdapter, type DiscoveredModel } from "./providers";
@@ -33,7 +33,7 @@ export async function syncProviderModels(providerId: string) {
       where: { id: providerId },
       data: { lastSyncAt: new Date(), lastSyncStatus: "error", lastSyncError: (e as Error).message.slice(0, 500) },
     });
-    throw new HttpError(502, `Model discovery failed: ${(e as Error).message}`);
+    throw new HttpError(502, `فشل اكتشاف النماذج: ${(e as Error).message}`);
   }
   const existing = await prisma.aiModel.findMany({ where: { providerId } });
   const byId = new Map(existing.map((m) => [m.modelId, m]));
@@ -88,7 +88,7 @@ export async function syncProviderModels(providerId: string) {
 export async function applySuggestedDefaults(providerId: string) {
   const provider = await prisma.provider.findUniqueOrThrow({ where: { id: providerId } });
   const adapter = getAdapter(provider);
-  if (!adapter.suggestedDefaults) throw new HttpError(400, "This provider does not publish suggested defaults");
+  if (!adapter.suggestedDefaults) throw new HttpError(400, "هذا المزوّد لا ينشر إعدادات افتراضية مقترحة");
   const traits = await adapter.suggestedDefaults();
   const map: [RouteRole, string | undefined][] = [
     ["text", traits.default],
@@ -145,8 +145,7 @@ export function isUsable(m: AiModel & { provider: Provider }) {
 }
 
 export async function getPublicCatalog(): Promise<PublicCatalog> {
-  ensureBusStarted();
-  const v = currentVersion() || (await readVersion());
+  const v = await freshVersion();
   if (catalogCache && catalogCache.version === v) return catalogCache.data;
   const [models, routing, plans] = await Promise.all([
     prisma.aiModel.findMany({
@@ -230,22 +229,22 @@ export async function resolveRoute(opts: {
   if (opts.requestedModelId) {
     const m = await loadModel(opts.requestedModelId);
     if (!m || !m.enabled || !(m.inCatalog || m.source === "MANUAL") || m.offline) {
-      throw new HttpError(409, "The selected model is no longer available. Please choose another model.", "model_unavailable");
+      throw new HttpError(409, "النموذج المحدد لم يعد متاحًا. يرجى اختيار نموذج آخر.", "model_unavailable");
     }
     if (!(await opts.allowsModel(m))) {
-      throw new HttpError(403, `${m.displayName} is not included in your ${opts.plan.name} plan.`, "model_not_in_plan");
+      throw new HttpError(403, `النموذج ${m.displayName} غير متاح في باقتك (${opts.plan.name}).`, "model_not_in_plan");
     }
-    if (opts.role === "image" && !m.supportsImageGeneration) throw new HttpError(400, `${m.displayName} cannot generate images.`);
-    if (opts.role !== "image" && !m.supportsText) throw new HttpError(400, `${m.displayName} is not a chat model.`);
+    if (opts.role === "image" && !m.supportsImageGeneration) throw new HttpError(400, `النموذج ${m.displayName} لا يستطيع توليد الصور.`);
+    if (opts.role !== "image" && !m.supportsText) throw new HttpError(400, `النموذج ${m.displayName} ليس نموذج محادثة.`);
     if (m.provider.enabled) primary = m;
-    else reason = `${m.provider.name} is disabled`;
+    else reason = `المزوّد ${m.provider.name} معطّل`;
     if (primary && opts.needsVision && !primary.supportsVision) {
       const vision = await loadModel(catalog.defaults.vision);
       if (vision && (await opts.allowsModel(vision))) {
         primary = vision;
-        reason = `Routed to ${vision.displayName} because the selected model can't read images`;
+        reason = `تم التحويل إلى ${vision.displayName} لأن النموذج المحدد لا يقرأ الصور`;
       } else {
-        throw new HttpError(400, `${m.displayName} cannot read images. Choose a vision-capable model.`, "vision_unsupported");
+        throw new HttpError(400, `النموذج ${m.displayName} لا يستطيع قراءة الصور. اختر نموذجًا يدعم الرؤية.`, "vision_unsupported");
       }
     }
   } else {
@@ -284,12 +283,12 @@ export async function resolveRoute(opts: {
       if (targets.some((t) => t.model.id === c.id)) continue;
       if (opts.role === "image" ? !c.supportsImageGeneration : !c.supportsText) continue;
       if (opts.needsVision && !c.supportsVision) continue;
-      targets.push({ model: c, isFallback: true, reason: primary ? undefined : reason ?? "Primary route unavailable" });
+      targets.push({ model: c, isFallback: true, reason: primary ? undefined : reason ?? "المسار الأساسي غير متاح" });
     }
   }
 
   if (!targets.length) {
-    throw new HttpError(503, reason ? `${reason} and no fallback is configured.` : "No AI model is currently available. Please try again later.", "no_route");
+    throw new HttpError(503, reason ? `${reason} ولا يوجد نموذج احتياطي مُعدّ.` : "لا يوجد نموذج ذكاء اصطناعي متاح حاليًا. يرجى المحاولة لاحقًا.", "no_route");
   }
   return targets;
 }

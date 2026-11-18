@@ -16,12 +16,12 @@ export const PUT = adminRoute(async ({ req, log, publish }) => {
     const id = body[f];
     if (!id) continue;
     const m = await prisma.aiModel.findUnique({ where: { id } });
-    if (!m) throw new HttpError(400, `${f}: model not found`);
-    if (f === "defaultImageModelId" ? !m.supportsImageGeneration : !m.supportsText) throw new HttpError(400, `${f}: ${m.displayName} does not support this role`);
+    if (!m) throw new HttpError(400, `${f}: النموذج غير موجود`);
+    if (f === "defaultImageModelId" ? !m.supportsImageGeneration : !m.supportsText) throw new HttpError(400, `${f}: النموذج ${m.displayName} لا يدعم هذا الدور`);
     if (!m.enabled) toEnable.push(m.id);
   }
   for (const f of ["defaultProviderId", "fallbackProviderId"] as const) {
-    if (body[f] && !(await prisma.provider.findUnique({ where: { id: body[f]! } }))) throw new HttpError(400, `${f}: provider not found`);
+    if (body[f] && !(await prisma.provider.findUnique({ where: { id: body[f]! } }))) throw new HttpError(400, `${f}: المزوّد غير موجود`);
   }
   const before = await getRouting();
   if (toEnable.length) await prisma.aiModel.updateMany({ where: { id: { in: toEnable } }, data: { enabled: true } });

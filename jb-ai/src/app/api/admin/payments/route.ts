@@ -17,7 +17,7 @@ export const GET = adminRoute(async () => {
 });
 
 export const PUT = adminRoute(async ({ req, user, log }) => {
-  if (user.role !== "OWNER") throw new HttpError(403, "Only the owner can change payment credentials");
+  if (user.role !== "OWNER") throw new HttpError(403, "المالك فقط يمكنه تغيير مفاتيح الدفع");
   const body = await parseBody(req, z.object({ secretKey: z.string().trim().max(300).optional(), webhookSecret: z.string().trim().max(300).optional() }));
   await savePaymentSecrets(body);
   await log("payments.credentials_updated", { details: { secretKey: Boolean(body.secretKey), webhookSecret: Boolean(body.webhookSecret) } });

@@ -5,7 +5,7 @@ import { clientIp, handler, json, parseBody } from "@/lib/http";
 import { rateLimit } from "@/lib/rate-limit";
 
 export const POST = handler(async (req: Request) => {
-  rateLimit(`forgot:${clientIp(req)}`, 5, 3600_000);
+  await rateLimit(`forgot:${clientIp(req)}`, 5, 3600_000);
   const { email } = await parseBody(req, z.object({ email: z.string().trim().toLowerCase().email() }));
   const user = await prisma.user.findUnique({ where: { email } });
   if (user && !user.disabled) await sendPasswordResetEmail(user).catch((e) => console.error("[forgot]", e));

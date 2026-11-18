@@ -20,7 +20,7 @@ export function Modal({ open, onClose, title, children, wide }: { open: boolean;
       >
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-ink-700 bg-ink-900 px-5 py-3">
           <h2 className="text-base font-semibold">{title}</h2>
-          <button className="btn-ghost p-1.5" onClick={onClose} aria-label="Close">
+          <button className="btn-ghost p-1.5" onClick={onClose} aria-label="إغلاق">
             <X size={18} />
           </button>
         </div>

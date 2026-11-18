@@ -41,7 +41,7 @@ function SettingsInner() {
   // After checkout we wait for the signed webhook to activate the plan (never trust the redirect itself).
   useEffect(() => {
     if (sp.get("checkout") !== "success") return;
-    toast("Payment received — activating your plan as soon as the payment provider confirms it…", "info");
+    toast("استلمنا الدفع — سيتم تفعيل باقتك فور تأكيد مزوّد الدفع…", "info");
     let n = 0;
     const t = setInterval(async () => {
       n++;
@@ -49,27 +49,27 @@ function SettingsInner() {
       setMe(d);
       if (d.subscription?.status === "ACTIVE" || n > 20) {
         clearInterval(t);
-        if (d.subscription?.status === "ACTIVE") toast(`${d.plan.name} plan is active.`, "ok");
+        if (d.subscription?.status === "ACTIVE") toast(`تم تفعيل باقة ${d.plan.name}.`, "ok");
         api("/api/billing/payments").then((x) => setPayments(x.payments)).catch(() => {});
       }
     }, 3000);
     return () => clearInterval(t);
   }, [sp, toast]);
 
-  if (!me?.user) return <p className="p-8 text-center text-slate-400">Loading…</p>;
+  if (!me?.user) return <p className="p-8 text-center text-slate-400">جارٍ التحميل…</p>;
   const sub = me.subscription;
 
   return (
     <div className="mx-auto max-w-3xl px-4 pb-16">
       <header className="flex items-center justify-between py-5">
         <Link href="/"><Logo /></Link>
-        <Link href="/" className="btn-outline px-3 py-1.5">Back to chat</Link>
+        <Link href="/" className="btn-outline px-3 py-1.5">العودة للمحادثة</Link>
       </header>
-      <h1 className="text-2xl font-semibold">Settings</h1>
+      <h1 className="text-2xl font-semibold">الإعدادات</h1>
       <div className="mt-4 flex gap-1 overflow-x-auto border-b border-ink-700">
         {TABS.map((t) => (
-          <button key={t} className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm capitalize ${tab === t ? "border-brand-500 text-white" : "border-transparent text-slate-400 hover:text-white"}`} onClick={() => setTab(t)}>
-            {t === "account" ? "Account & data" : t}
+          <button key={t} className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm ${tab === t ? "border-brand-500 text-white" : "border-transparent text-slate-400 hover:text-white"}`} onClick={() => setTab(t)}>
+            { { profile: "الملف الشخصي", billing: "الاشتراك والفوترة", usage: "الاستخدام", account: "الحساب والبيانات" }[t] }
           </button>
         ))}
       </div>
@@ -78,14 +78,14 @@ function SettingsInner() {
         <div className="mt-6 space-y-6">
           <div className="card space-y-4">
             <div>
-              <label className="label">Email</label>
-              <p className="text-sm">{me.user.email} {me.user.emailVerifiedAt ? <span className="badge ml-2 bg-emerald-500/15 text-emerald-300">Verified</span> : <span className="badge ml-2 bg-amber-500/15 text-amber-300">Unverified</span>}</p>
+              <label className="label">البريد الإلكتروني</label>
+              <p className="text-sm"><bdi dir="ltr">{me.user.email}</bdi> {me.user.emailVerifiedAt ? <span className="badge ms-2 bg-emerald-500/15 text-emerald-300">مؤكَّد</span> : <span className="badge ms-2 bg-amber-500/15 text-amber-300">غير مؤكَّد</span>}</p>
             </div>
             <div>
-              <label className="label" htmlFor="nm">Display name</label>
+              <label className="label" htmlFor="nm">الاسم الظاهر</label>
               <div className="flex gap-2">
                 <input id="nm" className="input" value={name} onChange={(e) => setName(e.target.value)} />
-                <button className="btn-primary" onClick={() => api("/api/account", { method: "PATCH", body: { name } }).then(() => toast("Saved", "ok")).catch((e) => toast(e.message, "err"))}>Save</button>
+                <button className="btn-primary" onClick={() => api("/api/account", { method: "PATCH", body: { name } }).then(() => toast("تم الحفظ", "ok")).catch((e) => toast(e.message, "err"))}>حفظ</button>
               </div>
             </div>
           </div>
@@ -94,14 +94,14 @@ function SettingsInner() {
             onSubmit={(e) => {
               e.preventDefault();
               api("/api/account", { method: "PATCH", body: { currentPassword: curPw, newPassword: newPw } })
-                .then(() => { toast("Password changed", "ok"); setCurPw(""); setNewPw(""); })
+                .then(() => { toast("تم تغيير كلمة المرور", "ok"); setCurPw(""); setNewPw(""); })
                 .catch((err) => toast(err.message, "err"));
             }}
           >
-            <h2 className="font-semibold">Change password</h2>
-            <input className="input" type="password" placeholder="Current password" autoComplete="current-password" value={curPw} onChange={(e) => setCurPw(e.target.value)} required />
-            <input className="input" type="password" placeholder="New password (min 8 characters)" autoComplete="new-password" minLength={8} value={newPw} onChange={(e) => setNewPw(e.target.value)} required />
-            <button className="btn-primary">Update password</button>
+            <h2 className="font-semibold">تغيير كلمة المرور</h2>
+            <input className="input" type="password" placeholder="كلمة المرور الحالية" autoComplete="current-password" value={curPw} onChange={(e) => setCurPw(e.target.value)} required />
+            <input className="input" type="password" placeholder="كلمة المرور الجديدة (٨ أحرف على الأقل)" autoComplete="new-password" minLength={8} value={newPw} onChange={(e) => setNewPw(e.target.value)} required />
+            <button className="btn-primary">تحديث كلمة المرور</button>
           </form>
         </div>
       )}
@@ -111,31 +111,31 @@ function SettingsInner() {
           <div className="card">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-sm text-slate-400">Current plan</p>
+                <p className="text-sm text-slate-400">باقتك الحالية</p>
                 <p className="text-xl font-semibold">{me.plan.name}</p>
                 {sub && (
                   <p className="mt-1 text-sm text-slate-400">
-                    Status: <b className="text-slate-200">{sub.status.toLowerCase()}</b> · {sub.interval === "YEAR" ? "Yearly" : "Monthly"}
-                    {sub.currentPeriodEnd && <> · {sub.cancelAtPeriodEnd ? "Ends" : "Renews"} {fmtDate(sub.currentPeriodEnd)}</>}
+                    الحالة: <b className="text-slate-200">{({ ACTIVE: "نشطة", TRIALING: "تجريبية", PAST_DUE: "متأخرة السداد", CANCELED: "ملغاة", EXPIRED: "منتهية", INCOMPLETE: "غير مكتملة" } as Record<string, string>)[sub.status] ?? sub.status}</b> · {sub.interval === "YEAR" ? "سنوي" : "شهري"}
+                    {sub.currentPeriodEnd && <> · {sub.cancelAtPeriodEnd ? "تنتهي في" : "تتجدد في"} {fmtDate(sub.currentPeriodEnd)}</>}
                   </p>
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
-                <Link href="/plans" className="btn-primary">{me.plan.key === "free" ? "Upgrade" : "Change plan"}</Link>
+                <Link href="/plans" className="btn-primary">{me.plan.key === "free" ? "ترقية" : "تغيير الباقة"}</Link>
                 {sub && sub.status === "ACTIVE" && (
                   <>
                     <button className="btn-outline" onClick={() => api<{ url: string }>("/api/billing/portal", { method: "POST" }).then((d) => (window.location.href = d.url)).catch((e) => toast(e.message, "err"))}>
-                      Manage billing
+                      إدارة الفوترة
                     </button>
                     <button
                       className="btn-outline"
                       onClick={() =>
                         api("/api/billing/cancel", { body: { cancel: !sub.cancelAtPeriodEnd } })
-                          .then(() => { toast(sub.cancelAtPeriodEnd ? "Subscription resumed" : "Subscription will end at period end", "ok"); void load(); })
+                          .then(() => { toast(sub.cancelAtPeriodEnd ? "تم استئناف الاشتراك" : "سينتهي الاشتراك بنهاية الفترة الحالية", "ok"); void load(); })
                           .catch((e) => toast(e.message, "err"))
                       }
                     >
-                      {sub.cancelAtPeriodEnd ? "Resume subscription" : "Cancel subscription"}
+                      {sub.cancelAtPeriodEnd ? "استئناف الاشتراك" : "إلغاء الاشتراك"}
                     </button>
                   </>
                 )}
@@ -143,16 +143,16 @@ function SettingsInner() {
             </div>
           </div>
           <div className="card">
-            <h2 className="mb-3 font-semibold">Payment history</h2>
+            <h2 className="mb-3 font-semibold">سجل المدفوعات</h2>
             {!payments.length ? (
-              <p className="text-sm text-slate-400">No payments yet.</p>
+              <p className="text-sm text-slate-400">لا توجد مدفوعات بعد.</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="text-left text-xs text-slate-500"><tr><th className="py-2">Date</th><th>Description</th><th>Amount</th><th>Status</th></tr></thead>
+                  <thead className="text-start text-xs text-slate-500"><tr><th className="py-2">التاريخ</th><th>الوصف</th><th>المبلغ</th><th>الحالة</th></tr></thead>
                   <tbody>
                     {payments.map((p) => (
-                      <tr key={p.id} className="border-t border-ink-700"><td className="py-2">{fmtDate(p.createdAt)}</td><td>{p.description}</td><td>{money(p.amountCents, p.currency)}</td><td className="capitalize">{p.status}</td></tr>
+                      <tr key={p.id} className="border-t border-ink-700"><td className="py-2">{fmtDate(p.createdAt)}</td><td>{p.description}</td><td><bdi>{money(p.amountCents, p.currency)}</bdi></td><td>{({ paid: "مدفوعة", failed: "فشلت" } as Record<string, string>)[p.status] ?? p.status}</td></tr>
                     ))}
                   </tbody>
                 </table>
@@ -165,14 +165,14 @@ function SettingsInner() {
       {tab === "usage" && (
         <div className="mt-6 grid gap-4 sm:grid-cols-3">
           {[
-            ["Messages today", me.usage.messagesToday, me.plan.dailyMessageLimit],
-            ["Messages this month", me.usage.messagesThisMonth, me.plan.monthlyMessageLimit],
-            ["Tokens this month", me.usage.tokensThisMonth, me.plan.monthlyTokenLimit],
+            ["رسائل اليوم", me.usage.messagesToday, me.plan.dailyMessageLimit],
+            ["رسائل هذا الشهر", me.usage.messagesThisMonth, me.plan.monthlyMessageLimit],
+            ["التوكنز هذا الشهر", me.usage.tokensThisMonth, me.plan.monthlyTokenLimit],
           ].map(([label, v, limit]) => (
             <div key={label as string} className="card">
               <p className="text-sm text-slate-400">{label}</p>
               <p className="mt-1 text-2xl font-semibold">{fmtNum(v as number)}</p>
-              <p className="text-xs text-slate-500">{limit == null ? "No limit" : `of ${fmtNum(limit as number)}`}</p>
+              <p className="text-xs text-slate-500">{limit == null ? "بدون حد" : `من أصل ${fmtNum(limit as number)}`}</p>
               {limit != null && (
                 <div className="mt-2 h-1.5 overflow-hidden rounded bg-ink-600"><div className="h-full bg-brand-500" style={{ width: `${Math.min(100, ((v as number) / Math.max(1, limit as number)) * 100)}%` }} /></div>
               )}
@@ -184,24 +184,24 @@ function SettingsInner() {
       {tab === "account" && (
         <div className="mt-6 space-y-6">
           <div className="card">
-            <h2 className="font-semibold">Your data</h2>
-            <p className="mt-1 text-sm text-slate-400">Conversations are private to your account and stored encrypted in transit. Delete individual chats from the sidebar.</p>
-            <button className="btn-outline mt-3" onClick={() => api("/api/auth/logout", { method: "POST" }).then(() => (window.location.href = "/"))}>Log out</button>
+            <h2 className="font-semibold">بياناتك</h2>
+            <p className="mt-1 text-sm text-slate-400">محادثاتك خاصة بحسابك ولا يستطيع أي مستخدم آخر الوصول إليها، ويمكنك حذف أي محادثة من القائمة الجانبية.</p>
+            <button className="btn-outline mt-3" onClick={() => api("/api/auth/logout", { method: "POST" }).then(() => (window.location.href = "/"))}>تسجيل الخروج</button>
           </div>
           <div className="card border-red-500/30">
-            <h2 className="font-semibold text-red-300">Delete account</h2>
-            <p className="mt-1 text-sm text-slate-400">Permanently deletes your account, conversations, files and usage history. Active subscriptions are canceled. This cannot be undone.</p>
+            <h2 className="font-semibold text-red-300">حذف الحساب</h2>
+            <p className="mt-1 text-sm text-slate-400">يحذف حسابك ومحادثاتك وملفاتك وسجل استخدامك نهائيًا، ويُلغى أي اشتراك نشط. لا يمكن التراجع عن هذا الإجراء.</p>
             <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-              <input className="input" type="password" placeholder="Confirm with your password" value={delPw} onChange={(e) => setDelPw(e.target.value)} />
+              <input className="input" type="password" placeholder="أكّد بكلمة المرور" value={delPw} onChange={(e) => setDelPw(e.target.value)} />
               <button
                 className="btn-danger whitespace-nowrap"
                 disabled={!delPw}
                 onClick={() => {
-                  if (!confirm("Permanently delete your account and all data?")) return;
+                  if (!confirm("هل تريد حذف حسابك وجميع بياناتك نهائيًا؟")) return;
                   api("/api/account", { method: "DELETE", body: { password: delPw } }).then(() => (window.location.href = "/")).catch((e) => toast(e.message, "err"));
                 }}
               >
-                Delete my account
+                حذف حسابي
               </button>
             </div>
           </div>

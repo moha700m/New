@@ -9,6 +9,10 @@ body {
   background-image: radial-gradient(1200px 600px at 50% 110%, rgba(56, 89, 160, 0.22), transparent 60%), linear-gradient(180deg, #050812 0%, #081024 100%);
   background-attachment: fixed;
 }
+:lang(ar) { letter-spacing: 0; text-transform: none; font-style: normal; }
+.prose-chat, .msg-text { line-height: 1.8; }
+/* Code, keys, emails and URLs always read left-to-right */
+pre, code, kbd, .ltr { direction: ltr; unicode-bidi: isolate; }
 * { scrollbar-width: thin; scrollbar-color: #1d2846 transparent; }
 ::selection { background: rgba(91, 140, 255, 0.35); }
 
@@ -20,7 +24,7 @@ body {
   .btn-ghost { @apply btn text-slate-300 hover:bg-ink-700 hover:text-white; }
   .btn-danger { @apply btn bg-red-600/90 text-white hover:bg-red-600; }
   .input { @apply w-full rounded-lg border border-ink-500 bg-ink-850 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/50; }
-  .label { @apply mb-1 block text-xs font-medium uppercase tracking-wide text-slate-400; }
+  .label { @apply mb-1 block text-[13px] font-medium text-slate-400; }
   .card { @apply rounded-xl border border-ink-600 bg-ink-850/80 p-5; }
   .badge { @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold; }
 }
@@ -36,6 +40,7 @@ body {
 .hljs-built_in, .hljs-meta { color: #ffa657; }
 .hljs-deletion { color: #ffa198; }
 
-.prose-chat { @apply prose prose-invert max-w-none prose-p:leading-7 prose-pre:my-0 prose-pre:bg-transparent prose-pre:p-0 prose-code:before:content-none prose-code:after:content-none prose-a:text-brand-400 prose-headings:font-semibold prose-table:text-sm; }
+.prose-chat { @apply prose prose-invert max-w-none prose-p:leading-8 prose-pre:my-0 prose-pre:bg-transparent prose-pre:p-0 prose-code:before:content-none prose-code:after:content-none prose-a:text-brand-400 prose-headings:font-semibold prose-table:text-sm; }
 .prose-chat :not(pre) > code { @apply rounded bg-ink-700 px-1.5 py-0.5 text-[0.85em] text-slate-100; }
-.typing-cursor::after { content: "▍"; @apply ml-0.5 animate-pulse text-brand-400; }
+.prose-chat ul, .prose-chat ol { padding-inline-start: 1.4em; padding-left: 0; }
+.typing-cursor::after { content: "▍"; @apply ms-0.5 animate-pulse text-brand-400; }

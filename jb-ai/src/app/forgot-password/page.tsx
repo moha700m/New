@@ -9,9 +9,9 @@ export default function ForgotPage() {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   return (
-    <AuthShell title="Reset your password" subtitle="We'll email you a secure reset link." footer={<Link href="/login" className="text-brand-400">Back to log in</Link>}>
+    <AuthShell title="استعادة كلمة المرور" subtitle="سنرسل إلى بريدك رابطًا آمنًا لتعيين كلمة مرور جديدة." footer={<Link href="/login" className="text-brand-400">العودة لتسجيل الدخول</Link>}>
       {sent ? (
-        <p className="text-sm text-slate-300">If an account exists for <b>{email}</b>, a reset link is on its way. It expires in 1 hour.</p>
+        <p className="text-sm text-slate-300">إذا كان هناك حساب مرتبط بالبريد <b><bdi dir="ltr">{email}</bdi></b> فسيصلك رابط الاستعادة قريبًا، وصلاحيته ساعة واحدة.</p>
       ) : (
         <form
           className="space-y-4"
@@ -28,10 +28,10 @@ export default function ForgotPage() {
         >
           <FormError error={error} />
           <div>
-            <label className="label" htmlFor="email">Email</label>
-            <input id="email" className="input" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+            <label className="label" htmlFor="email">البريد الإلكتروني</label>
+            <input id="email" dir="ltr" className="input text-start" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
-          <button className="btn-primary w-full">Send reset link</button>
+          <button className="btn-primary w-full">إرسال رابط الاستعادة</button>
         </form>
       )}
     </AuthShell>

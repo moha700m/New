@@ -10,8 +10,8 @@ const patchSchema = providerSchema.partial().extend({ clearApiKey: z.boolean().o
 export const PATCH = adminRoute<{ id: string }>(async ({ req, params, log, publish }) => {
   const body = await parseBody(req, patchSchema);
   const cur = await prisma.provider.findUnique({ where: { id: params.id } });
-  if (!cur) throw new HttpError(404, "Provider not found");
-  if (body.slug && body.slug !== cur.slug && (await prisma.provider.findUnique({ where: { slug: body.slug } }))) throw new HttpError(409, "Slug already in use");
+  if (!cur) throw new HttpError(404, "المزوّد غير موجود");
+  if (body.slug && body.slug !== cur.slug && (await prisma.provider.findUnique({ where: { slug: body.slug } }))) throw new HttpError(409, "المعرّف مستخدم مسبقًا");
   const { apiKey, clearApiKey, ...rest } = body;
   const data: Record<string, unknown> = { ...rest };
   if (rest.baseUrl) data.baseUrl = rest.baseUrl.replace(/\/+$/, "");
@@ -36,7 +36,7 @@ export const PATCH = adminRoute<{ id: string }>(async ({ req, params, log, publi
 
 export const DELETE = adminRoute<{ id: string }>(async ({ params, log, publish }) => {
   const p = await prisma.provider.findUnique({ where: { id: params.id } });
-  if (!p) throw new HttpError(404, "Provider not found");
+  if (!p) throw new HttpError(404, "المزوّد غير موجود");
   await prisma.$transaction(async (tx) => {
     const r = await tx.routingConfig.findUnique({ where: { id: "global" } });
     if (r) {

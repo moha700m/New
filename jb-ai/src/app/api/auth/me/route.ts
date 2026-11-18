@@ -1,6 +1,6 @@
 import { getCurrentUser, isAdminRole, needsVerification } from "@/lib/auth";
 import { handler, json } from "@/lib/http";
-import { getUserPlan, usageSummary } from "@/lib/plans";
+import { effectiveUploadMb, getUserPlan, usageSummary } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +17,7 @@ export const GET = handler(async () => {
       monthlyMessageLimit: plan.monthlyMessageLimit,
       monthlyTokenLimit: plan.monthlyTokenLimit,
       allowUploads: plan.allowUploads,
-      maxUploadMb: plan.maxUploadMb,
+      maxUploadMb: effectiveUploadMb(plan),
       allowWebSearch: plan.allowWebSearch,
       allowImageGeneration: plan.allowImageGeneration,
     },

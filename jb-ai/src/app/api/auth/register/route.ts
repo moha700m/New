@@ -8,18 +8,18 @@ import { getSettings } from "@/lib/settings";
 
 const schema = z.object({
   email: z.string().trim().toLowerCase().email().max(200),
-  password: z.string().min(8, "Password must be at least 8 characters").max(200),
+  password: z.string().min(8, "كلمة المرور يجب أن تكون ٨ أحرف على الأقل").max(200),
   name: z.string().trim().max(80).optional(),
 });
 
 export const POST = handler(async (req: Request) => {
-  rateLimit(`register:${clientIp(req)}`, 10, 3600_000);
+  await rateLimit(`register:${clientIp(req)}`, 10, 3600_000);
   const body = await parseBody(req, schema);
   const settings = await getSettings();
   const isOwner = ownerEmailMatches(body.email);
-  if (!settings.registrationOpen && !isOwner) throw new HttpError(403, "Registration is currently closed");
+  if (!settings.registrationOpen && !isOwner) throw new HttpError(403, "التسجيل مغلق حاليًا");
   const exists = await prisma.user.findUnique({ where: { email: body.email } });
-  if (exists) throw new HttpError(409, "An account with this email already exists");
+  if (exists) throw new HttpError(409, "يوجد حساب مسجّل بهذا البريد الإلكتروني");
   const user = await prisma.user.create({
     data: { email: body.email, passwordHash: await hashPassword(body.password), name: body.name || null, role: isOwner ? "OWNER" : "USER" },
   });

@@ -78,7 +78,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
       try {
         localStorage.removeItem(MODEL_KEY);
       } catch {}
-      toast(`Your selected model is no longer available${fallbackName ? ` — switched to ${fallbackName}` : ""}.`, "info");
+      toast(`النموذج الذي اخترته لم يعد متاحًا${fallbackName ? ` — تم التحويل إلى ${fallbackName}` : ""}.`, "info");
     }
   }, [config, selectedModel, signedIn, toast, loadMe]);
 
@@ -142,7 +142,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
     try {
       const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: ctrl.signal });
       if (!res.ok || !res.body) {
-        const d = await res.json().catch(() => ({ error: `Request failed (${res.status})` }));
+        const d = await res.json().catch(() => ({ error: `تعذّر الطلب (${res.status})` }));
         if (d.code === "model_unavailable") setSelectedModel(null);
         patchMessage(assistantId, (m) => ({ ...m, status: "error", error: d.error }));
         if (res.status === 401) router.push("/login");
@@ -182,7 +182,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
           } else if (ev.type === "reasoning") {
             patchMessage(assistantId, (m) => ({ ...m, reasoning: (m.reasoning ?? "") + ev.text }));
           } else if (ev.type === "fallback") {
-            patchMessage(assistantId, (m) => ({ ...m, usedFallback: true, modelName: ev.model?.name, notice: `Primary model unavailable — answered by fallback ${ev.model?.name} (${ev.provider})` }));
+            patchMessage(assistantId, (m) => ({ ...m, usedFallback: true, modelName: ev.model?.name, notice: `النموذج الأساسي غير متاح — أجاب النموذج الاحتياطي ${ev.model?.name} (${ev.provider})` }));
           } else if (ev.type === "image") {
             patchMessage(assistantId, (m) => ({ ...m, attachments: [...(m.attachments ?? []), { id: ev.attachmentId, filename: "generated", mimeType: ev.mimeType, kind: "generated-image" }] }));
           } else if (ev.type === "done") {
@@ -194,7 +194,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
       }
     } catch (e) {
       if ((e as Error).name === "AbortError") patchMessage(assistantId, (m) => ({ ...m, status: m.status === "streaming" ? "stopped" : m.status }));
-      else patchMessage(assistantId, (m) => ({ ...m, status: "error", error: "Connection lost while streaming the response." }));
+      else patchMessage(assistantId, (m) => ({ ...m, status: "error", error: "انقطع الاتصال أثناء استلام الرد." }));
     } finally {
       setStreaming(false);
       abortRef.current = null;
@@ -218,7 +218,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
 
   async function send(text: string, atts: PendingAttachment[]) {
     if (!signedIn) return requireAuth();
-    if (me?.user?.mustVerify) return toast("Please verify your email address first.", "err");
+    if (me?.user?.mustVerify) return toast("يرجى تأكيد بريدك الإلكتروني أولًا.", "err");
     const tempId = `pending-assistant-${Date.now()}`;
     setMessages((list) => [
       ...list,
@@ -293,7 +293,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
       searchLocked={searchLocked}
       uploadsAllowed={me?.plan?.allowUploads ?? false}
       onRequireAuth={signedIn ? undefined : requireAuth}
-      placeholder={current?.capabilities.imageGeneration ? "Describe the image you want to create" : "Ask anything"}
+      placeholder={current?.capabilities.imageGeneration ? "صِف الصورة التي تريد إنشاءها" : "اسأل أي شيء"}
       autoFocus
       disabled={config?.site.maintenanceMode}
     />
@@ -317,39 +317,39 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
       />
       <main className="relative flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center gap-2 px-3 sm:px-4">
-          <button className="btn-ghost p-2 md:hidden" onClick={() => setSidebarOpen(true)} aria-label="Open sidebar">
+          <button className="btn-ghost p-2 md:hidden" onClick={() => setSidebarOpen(true)} aria-label="فتح القائمة">
             <Menu size={20} />
           </button>
           <ModelSelector models={models} value={selectedModel} onChange={chooseModel} defaultId={defaultId} signedIn={signedIn} />
-          <span className="hidden items-center gap-1 text-[11px] text-slate-500 sm:flex" title={connected ? "Live configuration connected" : "Live updates reconnecting (polling fallback active)"}>
+          <span className="hidden items-center gap-1 text-[11px] text-slate-500 sm:flex" title={connected ? "متصل بالتحديثات المباشرة" : "جارٍ إعادة الاتصال بالتحديثات المباشرة"}>
             {connected ? <Wifi size={12} className="text-emerald-400" /> : <WifiOff size={12} />}
           </span>
           <div className="flex-1" />
           {!signedIn && me && (
             <div className="flex items-center gap-2">
-              <Link href="/plans" className="hidden text-sm text-brand-400 hover:text-brand-400/80 sm:block">Plans</Link>
-              <Link href="/login" className="btn-outline hidden px-3 py-1.5 sm:inline-flex">Log in</Link>
-              <Link href="/register" className="btn-primary px-3 py-1.5">Sign up free</Link>
+              <Link href="/plans" className="hidden text-sm text-brand-400 hover:text-brand-400/80 sm:block">الباقات</Link>
+              <Link href="/login" className="btn-outline hidden px-3 py-1.5 sm:inline-flex">تسجيل الدخول</Link>
+              <Link href="/register" className="btn-primary px-3 py-1.5">سجّل مجانًا</Link>
             </div>
           )}
         </header>
 
         {me?.user?.mustVerify && (
           <div className="mx-3 mb-1 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-950/40 px-3 py-2 text-sm text-amber-100 sm:mx-auto sm:w-full sm:max-w-3xl">
-            <MailWarning size={16} className="shrink-0" /> Verify your email to start chatting. Check your inbox for the link.
-            <button className="ml-auto underline" onClick={() => api("/api/auth/resend", { method: "POST" }).then(() => toast("Verification email sent", "ok")).catch((e) => toast(e.message, "err"))}>
-              Resend
+            <MailWarning size={16} className="shrink-0" /> أكّد بريدك الإلكتروني لتبدأ المحادثة. تحقّق من صندوق الوارد.
+            <button className="ms-auto underline" onClick={() => api("/api/auth/resend", { method: "POST" }).then(() => toast("تم إرسال رسالة التأكيد", "ok")).catch((e) => toast(e.message, "err"))}>
+              إعادة الإرسال
             </button>
           </div>
         )}
-        {config?.site.maintenanceMode && <div className="mx-auto mb-1 w-full max-w-3xl rounded-lg border border-amber-500/30 bg-amber-950/40 px-3 py-2 text-sm text-amber-100">The service is under maintenance. Chat is temporarily unavailable.</div>}
+        {config?.site.maintenanceMode && <div className="mx-auto mb-1 w-full max-w-3xl rounded-lg border border-amber-500/30 bg-amber-950/40 px-3 py-2 text-sm text-amber-100">الخدمة تحت الصيانة حاليًا. المحادثة غير متاحة مؤقتًا.</div>}
 
         {empty ? (
           <div className="flex flex-1 flex-col items-center justify-center px-3 pb-24 sm:px-4">
-            <h1 className="text-center text-4xl font-medium tracking-tight sm:text-5xl">Ask anything</h1>
-            <p className="mt-3 text-center text-[15px] text-slate-300 sm:text-base">{config?.site.tagline ?? "Coding help, technical questions and more."}</p>
+            <h1 className="text-center text-4xl font-medium sm:text-5xl">اسأل أي شيء</h1>
+            <p className="mt-3 text-center text-[15px] text-slate-300 sm:text-base">{config?.site.tagline ?? "مساعدة في البرمجة، وأسئلة تقنية، وأكثر."}</p>
             <div className="mt-8 w-full max-w-3xl">{composer}</div>
-            {config && !models.length && <p className="mt-4 text-sm text-slate-500">No AI models are enabled yet. An administrator must enable models in the Engine Management Center.</p>}
+            {config && !models.length && <p className="mt-4 text-sm text-slate-500">لا توجد نماذج مفعّلة بعد. على المسؤول تفعيل النماذج من مركز إدارة المحركات.</p>}
           </div>
         ) : (
           <>
@@ -362,7 +362,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
               }}
             >
               <div className="mx-auto w-full max-w-3xl space-y-7 px-3 pb-8 pt-4 sm:px-4">
-                {loadingConv && <p className="text-center text-sm text-slate-500">Loading conversation…</p>}
+                {loadingConv && <p className="text-center text-sm text-slate-500">جارٍ تحميل المحادثة…</p>}
                 {messages.map((m, i) => (
                   <MessageView
                     key={m.id}
@@ -377,7 +377,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
             </div>
             <div className="mx-auto w-full max-w-3xl px-3 pb-3 sm:px-4 sm:pb-4">
               {composer}
-              <p className="mt-2 text-center text-[11px] text-slate-500">AI can make mistakes. Check important information.</p>
+              <p className="mt-2 text-center text-[11px] text-slate-500">قد يخطئ الذكاء الاصطناعي. تحقّق من المعلومات المهمة.</p>
             </div>
           </>
         )}

@@ -19,7 +19,7 @@ export const GET = adminRoute(async () => {
 
 export const POST = adminRoute(async ({ req, log, publish }) => {
   const body = await parseBody(req, providerSchema);
-  if (await prisma.provider.findUnique({ where: { slug: body.slug } })) throw new HttpError(409, "A provider with this slug already exists");
+  if (await prisma.provider.findUnique({ where: { slug: body.slug } })) throw new HttpError(409, "يوجد مزوّد بنفس المعرّف");
   const def = PROVIDER_TYPES.find((t) => t.type === body.type)!;
   const p = await prisma.provider.create({
     data: {

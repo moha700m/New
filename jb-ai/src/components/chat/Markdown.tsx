@@ -10,9 +10,9 @@ function CodeBlock({ className, children }: { className?: string; children?: Rea
   const lang = /language-([\w-]+)/.exec(className || "")?.[1];
   const text = extractText(children);
   return (
-    <div className="not-prose my-3 overflow-hidden rounded-xl border border-ink-600 bg-[#0b1222]">
+    <div dir="ltr" className="not-prose my-3 overflow-hidden rounded-xl border border-ink-600 bg-[#0b1222]">
       <div className="flex items-center justify-between border-b border-ink-700 px-3 py-1.5 text-xs text-slate-400">
-        <span>{lang || "code"}</span>
+        <span>{lang || "كود"}</span>
         <button
           className="flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-ink-700 hover:text-white"
           onClick={() => {
@@ -21,7 +21,7 @@ function CodeBlock({ className, children }: { className?: string; children?: Rea
             setTimeout(() => setCopied(false), 1500);
           }}
         >
-          {copied ? <Check size={13} /> : <Copy size={13} />} {copied ? "Copied" : "Copy"}
+          {copied ? <Check size={13} /> : <Copy size={13} />} {copied ? "تم النسخ" : "نسخ"}
         </button>
       </div>
       <pre className="overflow-x-auto p-3.5 text-[13px] leading-6">

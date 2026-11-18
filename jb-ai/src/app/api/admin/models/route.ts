@@ -31,9 +31,9 @@ export const GET = adminRoute(async ({ req }) => {
 export const POST = adminRoute(async ({ req, log, publish }) => {
   const { planKeys, ...body } = await parseBody(req, modelCreateSchema);
   const provider = await prisma.provider.findUnique({ where: { id: body.providerId } });
-  if (!provider) throw new HttpError(404, "Provider not found");
+  if (!provider) throw new HttpError(404, "المزوّد غير موجود");
   if (await prisma.aiModel.findUnique({ where: { providerId_modelId: { providerId: body.providerId, modelId: body.modelId } } })) {
-    throw new HttpError(409, "This model already exists for the provider");
+    throw new HttpError(409, "هذا النموذج موجود مسبقًا لدى المزوّد");
   }
   const m = await prisma.aiModel.create({ data: { ...body, source: "MANUAL", inCatalog: true } });
   if (planKeys) await setModelPlans(m.id, planKeys);

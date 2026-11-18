@@ -30,24 +30,24 @@ function LoginForm() {
     >
       <FormError error={error} />
       <div>
-        <label className="label" htmlFor="email">Email</label>
-        <input id="email" className="input" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+        <label className="label" htmlFor="email">البريد الإلكتروني</label>
+        <input id="email" dir="ltr" className="input text-start" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
       </div>
       <div>
         <div className="flex items-center justify-between">
-          <label className="label" htmlFor="password">Password</label>
-          <Link href="/forgot-password" className="mb-1 text-xs text-brand-400">Forgot password?</Link>
+          <label className="label" htmlFor="password">كلمة المرور</label>
+          <Link href="/forgot-password" className="mb-1 text-xs text-brand-400">نسيت كلمة المرور؟</Link>
         </div>
-        <input id="password" className="input" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+        <input id="password" dir="ltr" className="input text-start" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
       </div>
-      <button className="btn-primary w-full" disabled={busy}>{busy ? "Signing in…" : "Log in"}</button>
+      <button className="btn-primary w-full" disabled={busy}>{busy ? "جارٍ تسجيل الدخول…" : "تسجيل الدخول"}</button>
     </form>
   );
 }
 
 export default function LoginPage() {
   return (
-    <AuthShell title="Welcome back" subtitle="Log in to continue your conversations." footer={<>No account? <Link href="/register" className="text-brand-400">Sign up free</Link></>}>
+    <AuthShell title="أهلًا بعودتك" subtitle="سجّل دخولك لمتابعة محادثاتك." footer={<>ليس لديك حساب؟ <Link href="/register" className="text-brand-400">سجّل مجانًا</Link></>}>
       <Suspense>
         <LoginForm />
       </Suspense>

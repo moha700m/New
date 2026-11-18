@@ -1,21 +1,24 @@
+import "server-only";
+import { prisma } from "./db";
 import { HttpError } from "./http";
 
 /**
- * Sliding-window in-memory rate limiter (per server instance).
- * Plan quotas (daily/monthly limits) are enforced separately against the database.
+ * Fixed-window rate limiter stored in Postgres, so limits hold across serverless instances
+ * (Vercel) and multiple servers. Plan quotas are enforced separately from usage records.
  */
-const buckets = new Map<string, number[]>();
-
-export function rateLimit(key: string, limit: number, windowMs: number) {
+export async function rateLimit(key: string, limit: number, windowMs: number) {
   const now = Date.now();
-  const arr = (buckets.get(key) ?? []).filter((t) => now - t < windowMs);
-  if (arr.length >= limit) {
-    const retry = Math.ceil((windowMs - (now - arr[0]!)) / 1000);
-    throw new HttpError(429, `Too many requests. Try again in ${retry}s.`, "rate_limited");
+  const windowStart = new Date(Math.floor(now / windowMs) * windowMs);
+  const row = await prisma.rateLimit.upsert({
+    where: { key_windowStart: { key, windowStart } },
+    create: { key, windowStart, count: 1 },
+    update: { count: { increment: 1 } },
+  });
+  if (Math.random() < 0.01) {
+    void prisma.rateLimit.deleteMany({ where: { windowStart: { lt: new Date(now - 864e5) } } }).catch(() => {});
   }
-  arr.push(now);
-  buckets.set(key, arr);
-  if (buckets.size > 50_000) {
-    for (const [k, v] of buckets) if (!v.length || now - v[v.length - 1]! > windowMs) buckets.delete(k);
+  if (row.count > limit) {
+    const retry = Math.max(1, Math.ceil((windowStart.getTime() + windowMs - now) / 1000));
+    throw new HttpError(429, `طلبات كثيرة. حاول مرة أخرى بعد ${retry} ثانية.`, "rate_limited");
   }
 }

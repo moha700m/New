@@ -29,7 +29,7 @@ function estimateCost(model: AiModel, promptTokens?: number, completionTokens?: 
 
 function titleFrom(text: string) {
   const t = text.replace(/\s+/g, " ").trim();
-  return t ? (t.length > 60 ? t.slice(0, 57) + "…" : t) : "New chat";
+  return t ? (t.length > 60 ? t.slice(0, 57) + "…" : t) : "محادثة جديدة";
 }
 
 async function markProvider(p: Provider, ok: boolean, err?: string) {
@@ -50,23 +50,23 @@ export async function prepareChat(userId: string, plan: Plan, input: ChatInput, 
   let conversation = input.conversationId
     ? await prisma.conversation.findFirst({ where: { id: input.conversationId, userId } })
     : null;
-  if (input.conversationId && !conversation) throw new HttpError(404, "Conversation not found");
-  if ((input.regenerate || input.editMessageId) && !conversation) throw new HttpError(400, "Conversation required");
-  if (!input.regenerate && !input.content.trim() && !input.attachmentIds.length) throw new HttpError(400, "Message is empty");
+  if (input.conversationId && !conversation) throw new HttpError(404, "المحادثة غير موجودة");
+  if ((input.regenerate || input.editMessageId) && !conversation) throw new HttpError(400, "يجب تحديد المحادثة");
+  if (!input.regenerate && !input.content.trim() && !input.attachmentIds.length) throw new HttpError(400, "الرسالة فارغة");
 
   // ----- attachments must belong to the user and be unused
   let attachments: Attachment[] = [];
   if (input.attachmentIds.length) {
-    if (!plan.allowUploads) throw new HttpError(403, `File uploads are not included in the ${plan.name} plan.`);
+    if (!plan.allowUploads) throw new HttpError(403, `رفع الملفات غير متاح في باقة ${plan.name}.`);
     attachments = await prisma.attachment.findMany({ where: { id: { in: input.attachmentIds }, userId, messageId: null } });
-    if (attachments.length !== input.attachmentIds.length) throw new HttpError(400, "One or more attachments are invalid");
+    if (attachments.length !== input.attachmentIds.length) throw new HttpError(400, "مرفق واحد أو أكثر غير صالح");
   }
 
   // ----- decide routing role and requested model
   const catalog = await getPublicCatalog();
   let requested = input.modelId ?? conversation?.modelId ?? null;
   if (requested && !catalog.models.some((m) => m.id === requested)) {
-    if (input.modelId) throw new HttpError(409, "The selected model is no longer available. Please choose another model.", "model_unavailable");
+    if (input.modelId) throw new HttpError(409, "النموذج المحدد لم يعد متاحًا. يرجى اختيار نموذج آخر.", "model_unavailable");
     requested = null; // conversation's old model was disabled → use current default
   }
   const requestedPublic = requested ? catalog.models.find((m) => m.id === requested) : undefined;
@@ -79,7 +79,7 @@ export async function prepareChat(userId: string, plan: Plan, input: ChatInput, 
       if (r && (r.plans.includes(plan.key))) requested = r.id;
     }
   }
-  if (role === "image" && !plan.allowImageGeneration) throw new HttpError(403, `Image generation is not included in the ${plan.name} plan.`, "image_not_in_plan");
+  if (role === "image" && !plan.allowImageGeneration) throw new HttpError(403, `توليد الصور غير متاح في باقة ${plan.name}.`, "image_not_in_plan");
 
   // history may contain earlier images too
   const needsVision = attachments.some((a) => a.kind === "image");
@@ -96,18 +96,18 @@ export async function prepareChat(userId: string, plan: Plan, input: ChatInput, 
 
   // ----- persist the user turn
   if (!conversation) {
-    conversation = await prisma.conversation.create({ data: { userId, title: titleFrom(input.content || attachments[0]?.filename || "New chat"), modelId: targets[0]!.model.id } });
+    conversation = await prisma.conversation.create({ data: { userId, title: titleFrom(input.content || attachments[0]?.filename || "محادثة جديدة"), modelId: targets[0]!.model.id } });
   }
   let userMessageId: string | null = null;
   if (input.editMessageId) {
     const msg = await prisma.message.findFirst({ where: { id: input.editMessageId, conversationId: conversation.id, role: "user" } });
-    if (!msg) throw new HttpError(404, "Message not found");
+    if (!msg) throw new HttpError(404, "الرسالة غير موجودة");
     await prisma.message.update({ where: { id: msg.id }, data: { content: input.content } });
     await prisma.message.deleteMany({ where: { conversationId: conversation.id, createdAt: { gt: msg.createdAt } } });
     userMessageId = msg.id;
   } else if (input.regenerate) {
     const lastUser = await prisma.message.findFirst({ where: { conversationId: conversation.id, role: "user" }, orderBy: { createdAt: "desc" } });
-    if (!lastUser) throw new HttpError(400, "Nothing to regenerate");
+    if (!lastUser) throw new HttpError(400, "لا يوجد ما يمكن إعادة توليده");
     await prisma.message.deleteMany({ where: { conversationId: conversation.id, createdAt: { gt: lastUser.createdAt } } });
     userMessageId = lastUser.id;
   } else {
@@ -249,7 +249,7 @@ export async function executeChat(
   const stopped = signal.aborted;
   const final = used ?? targets[0]!;
   const status = stopped ? "stopped" : used ? "complete" : "error";
-  const errMsg = !used && !stopped ? lastError?.message ?? "The AI provider did not respond." : null;
+  const errMsg = !used && !stopped ? lastError?.message ?? "لم يستجب مزوّد الذكاء الاصطناعي." : null;
   const providerCost = usage.costUsd;
   const estimated = providerCost == null ? estimateCost(final.model, usage.promptTokens, usage.completionTokens) : null;
 
@@ -295,11 +295,11 @@ export async function executeChat(
 }
 
 function friendlyError(msg: string) {
-  if (/insufficient|balance|402/i.test(msg)) return "The AI provider rejected the request (insufficient provider credits). The administrator has been notified via the engine dashboard.";
-  if (/401|403|unauthori|invalid api key/i.test(msg)) return "The AI provider rejected the configured credentials.";
-  if (/timed out/i.test(msg)) return "The AI provider timed out. Please try again.";
-  if (/429/.test(msg)) return "The AI provider is rate limiting requests. Please try again shortly.";
-  return "The AI provider returned an error: " + msg.replace(/^[^:]+:\s*/, "").slice(0, 200);
+  if (/insufficient|balance|402/i.test(msg)) return "رفض مزوّد الذكاء الاصطناعي الطلب بسبب نفاد الرصيد لديه. تم تسجيل المشكلة في لوحة المحركات لدى المسؤول.";
+  if (/401|403|unauthori|invalid api key/i.test(msg)) return "رفض مزوّد الذكاء الاصطناعي مفتاح الوصول المُعدّ.";
+  if (/timed out/i.test(msg)) return "انتهت مهلة مزوّد الذكاء الاصطناعي. يرجى المحاولة مرة أخرى.";
+  if (/429/.test(msg)) return "مزوّد الذكاء الاصطناعي يحدّ من الطلبات حاليًا. حاول مرة أخرى بعد قليل.";
+  return "أرجع مزوّد الذكاء الاصطناعي خطأ: " + msg.replace(/^[^:]+:\s*/, "").slice(0, 200);
 }
 
 export type { RouteTarget };

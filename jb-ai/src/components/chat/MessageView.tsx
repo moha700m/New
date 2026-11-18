@@ -55,10 +55,10 @@ export function MessageView({ m, isLast, canAct, onRegenerate, onEdit }: { m: Ui
         {m.attachments?.length ? <Attachments list={m.attachments} /> : null}
         {editing ? (
           <div className="w-full max-w-[85%] rounded-2xl border border-ink-500 bg-ink-800 p-3">
-            <textarea className="input min-h-[90px] resize-y border-none bg-transparent p-0 focus:ring-0" value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus />
+            <textarea dir="auto" className="input min-h-[90px] resize-y border-none bg-transparent p-0 focus:ring-0" value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus />
             <div className="mt-2 flex justify-end gap-2">
               <button className="btn-ghost" onClick={() => setEditing(false)}>
-                Cancel
+                إلغاء
               </button>
               <button
                 className="btn-primary"
@@ -68,19 +68,19 @@ export function MessageView({ m, isLast, canAct, onRegenerate, onEdit }: { m: Ui
                   onEdit(draft.trim());
                 }}
               >
-                Save & submit
+                حفظ وإرسال
               </button>
             </div>
           </div>
         ) : (
-          m.content && <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-ink-700 px-4 py-2.5 text-[15px] leading-7">{m.content}</div>
+          m.content && <div dir="auto" className="msg-text max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-ee-md bg-ink-700 px-4 py-2.5 text-[15px] leading-7">{m.content}</div>
         )}
         {!editing && canAct && (
           <div className="mt-1 flex gap-1 opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100">
-            <button className="btn-ghost p-1.5" onClick={() => { setDraft(m.content); setEditing(true); }} aria-label="Edit message" title="Edit">
+            <button className="btn-ghost p-1.5" onClick={() => { setDraft(m.content); setEditing(true); }} aria-label="تعديل الرسالة" title="تعديل">
               <Pencil size={14} />
             </button>
-            <button className="btn-ghost p-1.5" onClick={() => navigator.clipboard.writeText(m.content)} aria-label="Copy message" title="Copy">
+            <button className="btn-ghost p-1.5" onClick={() => navigator.clipboard.writeText(m.content)} aria-label="نسخ الرسالة" title="نسخ">
               <Copy size={14} />
             </button>
           </div>
@@ -94,27 +94,27 @@ export function MessageView({ m, isLast, canAct, onRegenerate, onEdit }: { m: Ui
     <div className="group" data-testid="msg-assistant">
       {(m.notice || m.usedFallback) && (
         <div className="mb-2 flex items-center gap-1.5 text-xs text-amber-300/90">
-          <Shuffle size={13} /> {m.notice || `Answered by fallback model ${m.modelName ?? ""}`}
+          <Shuffle size={13} /> {m.notice || `أجاب النموذج الاحتياطي ${m.modelName ?? ""}`}
         </div>
       )}
       {m.reasoning && (
         <div className="mb-3">
           <button className="flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-slate-200" onClick={() => setShowReasoning((s) => !s)}>
-            <Brain size={14} /> {streaming && !m.content ? "Thinking…" : "Thought process"}
+            <Brain size={14} /> {streaming && !m.content ? "يفكّر…" : "خطوات التفكير"}
             <ChevronDown size={14} className={`transition ${showReasoning ? "rotate-180" : ""}`} />
           </button>
           {(showReasoning || (streaming && !m.content)) && (
-            <div className="mt-2 max-h-72 overflow-y-auto whitespace-pre-wrap border-l-2 border-ink-500 pl-3 text-sm leading-6 text-slate-400">{m.reasoning}</div>
+            <div dir="auto" className="mt-2 max-h-72 overflow-y-auto whitespace-pre-wrap border-s-2 border-ink-500 ps-3 text-sm leading-6 text-slate-400">{m.reasoning}</div>
           )}
         </div>
       )}
       {m.attachments?.length ? <Attachments list={m.attachments} /> : null}
       {m.content ? (
-        <div className={streaming ? "typing-cursor" : ""}>
+        <div dir="auto" className={streaming ? "typing-cursor" : ""}>
           <Markdown text={m.content} />
         </div>
       ) : streaming && !m.reasoning ? (
-        <div className="flex h-7 items-center gap-1" aria-label="Generating">
+        <div className="flex h-7 items-center gap-1" aria-label="جارٍ التوليد">
           {[0, 1, 2].map((i) => (
             <span key={i} className="h-2 w-2 animate-bounce rounded-full bg-slate-400" style={{ animationDelay: `${i * 0.15}s` }} />
           ))}
@@ -122,10 +122,10 @@ export function MessageView({ m, isLast, canAct, onRegenerate, onEdit }: { m: Ui
       ) : null}
       {m.status === "error" && (
         <div className="mt-2 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-950/40 px-3 py-2 text-sm text-red-200" data-testid="msg-error">
-          <AlertTriangle size={16} className="mt-0.5 shrink-0" /> {m.error || "Something went wrong."}
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" /> {m.error || "حدث خطأ غير متوقع."}
         </div>
       )}
-      {m.status === "stopped" && <div className="mt-1 text-xs text-slate-500">Generation stopped.</div>}
+      {m.status === "stopped" && <div className="mt-1 text-xs text-slate-500">تم إيقاف التوليد.</div>}
       {!streaming && (
         <div className="mt-2 flex items-center gap-1 text-slate-500">
           {m.content && (
@@ -136,18 +136,18 @@ export function MessageView({ m, isLast, canAct, onRegenerate, onEdit }: { m: Ui
                 setCopied(true);
                 setTimeout(() => setCopied(false), 1500);
               }}
-              aria-label="Copy response"
-              title="Copy"
+              aria-label="نسخ الرد"
+              title="نسخ"
             >
               {copied ? <Check size={15} /> : <Copy size={15} />}
             </button>
           )}
           {isLast && canAct && (
-            <button className="btn-ghost p-1.5" onClick={onRegenerate} aria-label="Regenerate response" title="Regenerate" data-testid="regenerate">
+            <button className="btn-ghost p-1.5" onClick={onRegenerate} aria-label="إعادة توليد الرد" title="إعادة التوليد" data-testid="regenerate">
               <RefreshCw size={15} />
             </button>
           )}
-          {m.modelName && <span className="ml-1 text-xs">{m.modelName}</span>}
+          {m.modelName && <span className="ms-1 text-xs"><bdi>{m.modelName}</bdi></span>}
         </div>
       )}
     </div>

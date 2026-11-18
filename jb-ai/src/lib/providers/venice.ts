@@ -121,7 +121,7 @@ export class VeniceAdapter extends OpenAICompatibleAdapter {
     try {
       const models = await this.fetchType("text");
       if (!this.cfg.apiKey) {
-        return { ok: false, latencyMs: Date.now() - t0, detail: `Catalog reachable (${models.length} text models) but no API key is configured.` };
+        return { ok: false, latencyMs: Date.now() - t0, detail: `الكتالوج متاح (${models.length} نموذج نصي) لكن لم يتم إضافة مفتاح API.` };
       }
       const res = await providerFetch(this.cfg, joinUrl(this.cfg.baseUrl, "/api_keys/rate_limits"), { headers: this.headers(false), timeoutMs: 20000 });
       const info = ((await res.json()) as { data?: any }).data ?? {};
@@ -131,8 +131,8 @@ export class VeniceAdapter extends OpenAICompatibleAdapter {
         ok: permitted,
         latencyMs: Date.now() - t0,
         detail: permitted
-          ? `Authenticated. ${models.length} text models. Balance: USD ${balances.USD ?? "?"}, DIEM ${balances.DIEM ?? "?"}.`
-          : `API key is valid but Venice reports access not permitted (balance USD ${balances.USD ?? 0}, DIEM ${balances.DIEM ?? 0}). Add credits at venice.ai/settings/api.`,
+          ? `تم التحقق من المفتاح. ${models.length} نموذج نصي. الرصيد: ${balances.USD ?? "?"} دولار، ${balances.DIEM ?? "?"} DIEM.`
+          : `مفتاح API صحيح لكن Venice لا يسمح بالاستخدام (الرصيد ${balances.USD ?? 0} دولار، ${balances.DIEM ?? 0} DIEM). اشحن الرصيد من venice.ai/settings/api.`,
         info: { balances, apiTier: info.apiTier, modelCount: models.length },
       };
     } catch (e) {

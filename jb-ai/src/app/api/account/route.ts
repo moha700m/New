@@ -15,7 +15,7 @@ export const PATCH = handler(async (req: Request) => {
   if (body.name !== undefined) data.name = body.name || null;
   if (body.newPassword) {
     const u = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
-    if (!body.currentPassword || !(await verifyPassword(body.currentPassword, u.passwordHash))) throw new HttpError(400, "Current password is incorrect");
+    if (!body.currentPassword || !(await verifyPassword(body.currentPassword, u.passwordHash))) throw new HttpError(400, "كلمة المرور الحالية غير صحيحة");
     data.passwordHash = await hashPassword(body.newPassword);
   }
   await prisma.user.update({ where: { id: user.id }, data });
@@ -27,8 +27,8 @@ export const DELETE = handler(async (req: Request) => {
   const user = await requireUser();
   const { password } = await parseBody(req, z.object({ password: z.string().min(1).max(200) }));
   const u = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
-  if (!(await verifyPassword(password, u.passwordHash))) throw new HttpError(400, "Password is incorrect");
-  if (u.role === "OWNER") throw new HttpError(400, "The owner account cannot be deleted from here.");
+  if (!(await verifyPassword(password, u.passwordHash))) throw new HttpError(400, "كلمة المرور غير صحيحة");
+  if (u.role === "OWNER") throw new HttpError(400, "لا يمكن حذف حساب المالك من هنا.");
   const sub = await prisma.subscription.findUnique({ where: { userId: user.id } });
   if (sub?.providerSubscriptionId && (sub.status === "ACTIVE" || sub.status === "TRIALING")) {
     await cancelImmediately(user.id).catch((e) => console.error("[account.delete] cancel failed", e));

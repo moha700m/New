@@ -1,5 +1,5 @@
 import { adminRoute, redactProvider } from "@/lib/admin";
-import { currentVersion, readVersion } from "@/lib/config-bus";
+import { freshVersion } from "@/lib/config-bus";
 import { prisma } from "@/lib/db";
 import { getPublicCatalog, getRouting } from "@/lib/engine";
 import { json } from "@/lib/http";
@@ -41,7 +41,7 @@ export const GET = adminRoute(async () => {
       modelsTotal, modelsEnabled, customerVisibleModels: catalog.models.length,
     },
     engine: {
-      configVersion: currentVersion() || (await readVersion()),
+      configVersion: await freshVersion(),
       activeProvider: providers.find((p) => p.id === routing.defaultProviderId)?.name ?? null,
       defaultModel: nameOf(routing.defaultTextModelId),
       effectiveDefaultModel: effectiveDefault ? { id: effectiveDefault.id, name: effectiveDefault.name, provider: effectiveDefault.provider } : null,

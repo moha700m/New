@@ -71,19 +71,19 @@ export async function getCurrentUser(): Promise<SafeUser | null> {
 
 export async function requireUser(): Promise<SafeUser> {
   const u = await getCurrentUser();
-  if (!u) throw new HttpError(401, "Authentication required", "unauthenticated");
+  if (!u) throw new HttpError(401, "يجب تسجيل الدخول", "unauthenticated");
   return u;
 }
 
 export async function requireAdmin(): Promise<SafeUser> {
   const u = await requireUser();
-  if (!isAdminRole(u.role)) throw new HttpError(403, "Administrator access required", "forbidden");
+  if (!isAdminRole(u.role)) throw new HttpError(403, "هذه الصفحة للمسؤولين فقط", "forbidden");
   return u;
 }
 
 export async function requireOwner(): Promise<SafeUser> {
   const u = await requireUser();
-  if (u.role !== "OWNER") throw new HttpError(403, "Owner access required", "forbidden");
+  if (u.role !== "OWNER") throw new HttpError(403, "هذا الإجراء للمالك فقط", "forbidden");
   return u;
 }
 
@@ -104,7 +104,7 @@ export async function issueToken(userId: string, type: TokenType, ttlMs: number)
 export async function consumeToken(token: string, type: TokenType) {
   const row = await prisma.verificationToken.findUnique({ where: { tokenHash: sha256(token) } });
   if (!row || row.type !== type || row.usedAt || row.expiresAt < new Date()) {
-    throw new HttpError(400, "This link is invalid or has expired.", "invalid_token");
+    throw new HttpError(400, "هذا الرابط غير صالح أو انتهت صلاحيته.", "invalid_token");
   }
   await prisma.verificationToken.update({ where: { id: row.id }, data: { usedAt: new Date() } });
   return row.userId;
@@ -116,9 +116,9 @@ export async function sendVerificationEmail(user: { id: string; email: string })
   const link = appUrl(`/verify-email?token=${encodeURIComponent(token)}`);
   return sendMail(
     user.email,
-    `Verify your ${s.siteName} account`,
-    `<p>Welcome to ${s.siteName}!</p><p><a href="${link}">Verify your email address</a></p><p>This link expires in 48 hours.</p>`,
-    `Welcome to ${s.siteName}! Verify your email: ${link}`,
+    `أكّد حسابك في ${s.siteName}`,
+    `<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;line-height:1.8"><p>أهلًا بك في ${s.siteName}!</p><p><a href="${link}">اضغط هنا لتأكيد بريدك الإلكتروني</a></p><p>صلاحية الرابط ٤٨ ساعة.</p></div>`,
+    `أهلًا بك في ${s.siteName}! أكّد بريدك الإلكتروني من هذا الرابط: ${link}`,
   );
 }
 
@@ -128,9 +128,9 @@ export async function sendPasswordResetEmail(user: { id: string; email: string }
   const link = appUrl(`/reset-password?token=${encodeURIComponent(token)}`);
   return sendMail(
     user.email,
-    `Reset your ${s.siteName} password`,
-    `<p>Someone requested a password reset for your account.</p><p><a href="${link}">Choose a new password</a></p><p>This link expires in 1 hour. If you didn't request it, ignore this email.</p>`,
-    `Reset your password: ${link} (expires in 1 hour)`,
+    `استعادة كلمة المرور في ${s.siteName}`,
+    `<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;line-height:1.8"><p>وصلنا طلب لاستعادة كلمة المرور لحسابك.</p><p><a href="${link}">اضغط هنا لاختيار كلمة مرور جديدة</a></p><p>صلاحية الرابط ساعة واحدة. إذا لم تطلب ذلك فتجاهل هذه الرسالة.</p></div>`,
+    `استعد كلمة المرور من هذا الرابط (صالح لمدة ساعة): ${link}`,
   );
 }
 

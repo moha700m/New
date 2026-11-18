@@ -12,7 +12,7 @@ export const GET = adminRoute(async () => {
 
 export const POST = adminRoute(async ({ req, log, publish }) => {
   const { modelIds, ...body } = await parseBody(req, planSchema);
-  if (await prisma.plan.findUnique({ where: { key: body.key } })) throw new HttpError(409, "Plan key already exists");
+  if (await prisma.plan.findUnique({ where: { key: body.key } })) throw new HttpError(409, "معرّف الباقة مستخدم مسبقًا");
   if (body.isDefault) await prisma.plan.updateMany({ data: { isDefault: false } });
   const plan = await prisma.plan.create({ data: { ...body, ...(modelIds ? { models: { create: modelIds.map((modelId) => ({ modelId })) } } : {}) } });
   await log("plan.create", { entityType: "plan", entityId: plan.id, details: { key: plan.key } });

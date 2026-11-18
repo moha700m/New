@@ -5,7 +5,7 @@ import { HttpError } from "./http";
 
 export async function getDefaultPlan(): Promise<Plan> {
   const p = (await prisma.plan.findFirst({ where: { isDefault: true } })) ?? (await prisma.plan.findFirst({ orderBy: { sortOrder: "asc" } }));
-  if (!p) throw new HttpError(500, "No subscription plans are configured");
+  if (!p) throw new HttpError(500, "لا توجد باقات اشتراك مُعدّة");
   return p;
 }
 
@@ -46,13 +46,19 @@ export async function usageSummary(userId: string) {
 export async function enforceQuota(userId: string, plan: Plan) {
   const u = await usageSummary(userId);
   if (plan.dailyMessageLimit != null && u.messagesToday >= plan.dailyMessageLimit) {
-    throw new HttpError(429, `Daily limit of ${plan.dailyMessageLimit} messages reached on the ${plan.name} plan. Upgrade for more.`, "quota_daily");
+    throw new HttpError(429, `وصلت للحد اليومي (${plan.dailyMessageLimit} رسالة) في باقة ${plan.name}. رقِّ باقتك للمزيد.`, "quota_daily");
   }
   if (plan.monthlyMessageLimit != null && u.messagesThisMonth >= plan.monthlyMessageLimit) {
-    throw new HttpError(429, `Monthly limit of ${plan.monthlyMessageLimit} messages reached on the ${plan.name} plan.`, "quota_monthly");
+    throw new HttpError(429, `وصلت للحد الشهري (${plan.monthlyMessageLimit} رسالة) في باقة ${plan.name}.`, "quota_monthly");
   }
   if (plan.monthlyTokenLimit != null && u.tokensThisMonth >= plan.monthlyTokenLimit) {
-    throw new HttpError(429, `Monthly token allowance reached on the ${plan.name} plan.`, "quota_tokens");
+    throw new HttpError(429, `وصلت لحد التوكنز الشهري في باقة ${plan.name}.`, "quota_tokens");
   }
   return u;
+}
+
+/** Hosting platform request-body ceiling (Vercel functions accept ~4.5 MB bodies). */
+export const PLATFORM_MAX_UPLOAD_MB = process.env.VERCEL ? 4 : 100;
+export function effectiveUploadMb(plan: Plan) {
+  return Math.min(plan.maxUploadMb, PLATFORM_MAX_UPLOAD_MB);
 }

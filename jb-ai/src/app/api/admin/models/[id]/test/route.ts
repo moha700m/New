@@ -8,7 +8,7 @@ export const maxDuration = 120;
 /** Sends a real request to the model through its provider adapter and reports latency, output and usage. */
 export const POST = adminRoute<{ id: string }>(async ({ params, user, log }) => {
   const m = await prisma.aiModel.findUnique({ where: { id: params.id }, include: { provider: true } });
-  if (!m) throw new HttpError(404, "Model not found");
+  if (!m) throw new HttpError(404, "النموذج غير موجود");
   const adapter = getAdapter(m.provider);
   const t0 = Date.now();
   const signal = AbortSignal.timeout(90_000);

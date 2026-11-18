@@ -15,9 +15,9 @@ function encrypt(plain: string) {
 
 async function main() {
   const plans = [
-    { key: "free", name: "Free", description: "Get started with everyday questions.", priceMonthlyCents: 0, priceYearlyCents: 0, dailyMessageLimit: 20, monthlyMessageLimit: 300, monthlyTokenLimit: 500_000, maxUploadMb: 2, allowUploads: true, allowWebSearch: false, allowImageGeneration: false, allowAllModels: false, isDefault: true, sortOrder: 0, features: ["20 messages per day", "Standard models", "Image & file attachments up to 2 MB"] },
-    { key: "pro", name: "Pro", description: "More messages, more models, web search.", priceMonthlyCents: 1200, priceYearlyCents: 12000, dailyMessageLimit: 300, monthlyMessageLimit: 5000, monthlyTokenLimit: 10_000_000, maxUploadMb: 10, allowUploads: true, allowWebSearch: true, allowImageGeneration: true, allowAllModels: false, isDefault: false, sortOrder: 1, features: ["300 messages per day", "Reasoning & coding models", "Web search", "Image generation", "10 MB attachments"] },
-    { key: "premium", name: "Premium", description: "Every model, highest allowances.", priceMonthlyCents: 2900, priceYearlyCents: 29000, dailyMessageLimit: null, monthlyMessageLimit: 20000, monthlyTokenLimit: 50_000_000, maxUploadMb: 25, allowUploads: true, allowWebSearch: true, allowImageGeneration: true, allowAllModels: true, isDefault: false, sortOrder: 2, features: ["Unlimited daily messages", "All models incl. premium frontier models", "Web search & image generation", "25 MB attachments", "Priority routing"] },
+    { key: "free", name: "المجانية", description: "ابدأ بأسئلتك اليومية.", priceMonthlyCents: 0, priceYearlyCents: 0, dailyMessageLimit: 20, monthlyMessageLimit: 300, monthlyTokenLimit: 500_000, maxUploadMb: 2, allowUploads: true, allowWebSearch: false, allowImageGeneration: false, allowAllModels: false, isDefault: true, sortOrder: 0, features: ["٢٠ رسالة يوميًا", "النماذج الأساسية", "إرفاق صور وملفات حتى ٢ ميجابايت"] },
+    { key: "pro", name: "برو", description: "رسائل أكثر، ونماذج أكثر، وبحث في الويب.", priceMonthlyCents: 1200, priceYearlyCents: 12000, dailyMessageLimit: 300, monthlyMessageLimit: 5000, monthlyTokenLimit: 10_000_000, maxUploadMb: 4, allowUploads: true, allowWebSearch: true, allowImageGeneration: true, allowAllModels: false, isDefault: false, sortOrder: 1, features: ["٣٠٠ رسالة يوميًا", "نماذج التفكير والبرمجة", "البحث في الويب", "توليد الصور", "مرفقات حتى ٤ ميجابايت"] },
+    { key: "premium", name: "بريميوم", description: "كل النماذج، وأعلى الحدود.", priceMonthlyCents: 2900, priceYearlyCents: 29000, dailyMessageLimit: null, monthlyMessageLimit: 20000, monthlyTokenLimit: 50_000_000, maxUploadMb: 4, allowUploads: true, allowWebSearch: true, allowImageGeneration: true, allowAllModels: true, isDefault: false, sortOrder: 2, features: ["رسائل يومية بدون حد", "كل النماذج بما فيها النماذج المتقدمة", "البحث في الويب وتوليد الصور", "مرفقات حتى ٤ ميجابايت", "أولوية في المعالجة"] },
   ];
   for (const p of plans) {
     await prisma.plan.upsert({ where: { key: p.key }, create: p, update: {} });
@@ -39,7 +39,7 @@ async function main() {
   await prisma.routingConfig.upsert({ where: { id: "global" }, create: { id: "global", defaultProviderId: venice.id }, update: {} });
   await prisma.configState.upsert({ where: { id: "global" }, create: { id: "global", version: 1 }, update: {} });
   await prisma.setting.upsert({ where: { key: "system" }, create: { key: "system", value: {} }, update: {} });
-  console.log("Seed complete. Provider:", venice.name, "— sync the live model catalog from Admin → Model Management.");
+  console.log("Seed complete. Provider:", venice.name);
 }
 
 main()

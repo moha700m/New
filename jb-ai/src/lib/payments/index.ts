@@ -30,12 +30,12 @@ export async function savePaymentSecrets(input: { secretKey?: string; webhookSec
   const cur = await getPaymentSettings();
   const next: StoredPaymentSettings = { ...cur };
   if (input.secretKey) {
-    if (!/^(sk|rk)_(test|live)_/.test(input.secretKey)) throw new HttpError(400, "Stripe secret key must start with sk_test_, sk_live_, rk_test_ or rk_live_");
+    if (!/^(sk|rk)_(test|live)_/.test(input.secretKey)) throw new HttpError(400, "يجب أن يبدأ مفتاح Stripe السري بـ sk_test_ أو sk_live_ أو rk_test_ أو rk_live_");
     next.secretKeyEnc = encryptSecret(input.secretKey);
     next.secretKeyLast4 = last4(input.secretKey);
   }
   if (input.webhookSecret) {
-    if (!input.webhookSecret.startsWith("whsec_")) throw new HttpError(400, "Stripe webhook secret must start with whsec_");
+    if (!input.webhookSecret.startsWith("whsec_")) throw new HttpError(400, "يجب أن يبدأ سر إشعارات Stripe بـ whsec_");
     next.webhookSecretEnc = encryptSecret(input.webhookSecret);
     next.webhookSecretLast4 = last4(input.webhookSecret);
   }
@@ -66,7 +66,7 @@ export async function paymentStatus() {
 
 async function stripe(): Promise<Stripe> {
   const { secretKey } = await secrets();
-  if (!secretKey) throw new HttpError(503, "Payments are not configured yet. Please contact support.", "payments_unconfigured");
+  if (!secretKey) throw new HttpError(503, "الدفع غير مُفعّل بعد. يرجى التواصل مع الدعم.", "payments_unconfigured");
   return new Stripe(secretKey, { appInfo: { name: "JB AI" } });
 }
 
@@ -78,7 +78,7 @@ export async function testStripe() {
 
 export async function createCheckout(user: { id: string; email: string }, plan: Plan, interval: BillingInterval) {
   const amount = interval === "YEAR" ? plan.priceYearlyCents : plan.priceMonthlyCents;
-  if (!plan.active || amount <= 0) throw new HttpError(400, "This plan cannot be purchased");
+  if (!plan.active || amount <= 0) throw new HttpError(400, "لا يمكن شراء هذه الباقة");
   const s = await stripe();
   const dbUser = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
   const meta = { userId: user.id, planId: plan.id, planKey: plan.key, interval };
@@ -103,13 +103,13 @@ export async function createCheckout(user: { id: string; email: string }, plan: 
     success_url: appUrl("/settings?tab=billing&checkout=success"),
     cancel_url: appUrl("/plans?checkout=canceled"),
   });
-  if (!session.url) throw new HttpError(502, "Payment provider did not return a checkout URL");
+  if (!session.url) throw new HttpError(502, "لم يُرجع مزوّد الدفع رابط صفحة الدفع");
   return session.url;
 }
 
 export async function createPortal(userId: string) {
   const u = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
-  if (!u.billingCustomerId) throw new HttpError(400, "No billing account yet");
+  if (!u.billingCustomerId) throw new HttpError(400, "لا يوجد حساب فوترة بعد");
   const s = await stripe();
   const portal = await s.billingPortal.sessions.create({ customer: u.billingCustomerId, return_url: appUrl("/settings?tab=billing") });
   return portal.url;
@@ -117,7 +117,7 @@ export async function createPortal(userId: string) {
 
 export async function setCancelAtPeriodEnd(userId: string, cancel: boolean) {
   const sub = await prisma.subscription.findUnique({ where: { userId } });
-  if (!sub?.providerSubscriptionId) throw new HttpError(400, "No active paid subscription");
+  if (!sub?.providerSubscriptionId) throw new HttpError(400, "لا يوجد اشتراك مدفوع نشط");
   const s = await stripe();
   const updated = await s.subscriptions.update(sub.providerSubscriptionId, { cancel_at_period_end: cancel });
   await applyStripeSubscription(updated);
@@ -194,14 +194,14 @@ async function recordInvoice(inv: Stripe.Invoice, status: string) {
 
 export async function handleStripeWebhook(rawBody: string, signature: string | null) {
   const { secretKey, webhookSecret } = await secrets();
-  if (!webhookSecret) throw new HttpError(503, "Webhook secret not configured");
-  if (!signature) throw new HttpError(400, "Missing Stripe-Signature header");
+  if (!webhookSecret) throw new HttpError(503, "سر إشعارات الدفع غير مُعدّ");
+  if (!signature) throw new HttpError(400, "ترويسة Stripe-Signature مفقودة");
   const s = new Stripe(secretKey || "sk_test_unused");
   let event: Stripe.Event;
   try {
     event = s.webhooks.constructEvent(rawBody, signature, webhookSecret);
   } catch (e) {
-    throw new HttpError(400, `Webhook signature verification failed: ${(e as Error).message}`);
+    throw new HttpError(400, `فشل التحقق من توقيع الإشعار: ${(e as Error).message}`);
   }
   const seen = await prisma.webhookEvent.findUnique({ where: { id: event.id } });
   if (seen) return { duplicate: true, outcome: seen.outcome };

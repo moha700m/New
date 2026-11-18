@@ -32,10 +32,10 @@ export async function POST(req: Request) {
     const user = await requireUser();
     userId = user.id;
     const settings = await getSettings();
-    if (settings.maintenanceMode) throw new HttpError(503, "The service is under maintenance. Please try again soon.");
-    if (await needsVerification(user)) throw new HttpError(403, "Please verify your email address before chatting.", "email_unverified");
+    if (settings.maintenanceMode) throw new HttpError(503, "الخدمة تحت الصيانة. يرجى المحاولة لاحقًا.");
+    if (await needsVerification(user)) throw new HttpError(403, "يرجى تأكيد بريدك الإلكتروني قبل بدء المحادثة.", "email_unverified");
     input = await parseBody(req, schema);
-    rateLimit(`chat:${user.id}`, settings.chatRateLimitPerMinute, 60_000);
+    await rateLimit(`chat:${user.id}`, settings.chatRateLimitPerMinute, 60_000);
     const { plan } = await getUserPlan(user.id);
     prep = await prepareChat(user.id, plan, input, settings);
   } catch (e) {
@@ -56,7 +56,7 @@ export async function POST(req: Request) {
         await executeChat(userId, prep, input, emit, controller.signal);
       } catch (e) {
         console.error("[chat] stream failure", e);
-        emit({ type: "error", error: "Unexpected server error while generating the response." });
+        emit({ type: "error", error: "حدث خطأ غير متوقع في الخادم أثناء توليد الرد." });
       } finally {
         try {
           ctrl.close();

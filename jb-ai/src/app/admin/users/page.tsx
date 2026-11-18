@@ -20,31 +20,31 @@ export default function UsersPage() {
 
   return (
     <>
-      <PageHeader title="Users" subtitle={`${data?.total ?? 0} accounts`} actions={
+      <PageHeader title="المستخدمون" subtitle={`${data?.total ?? 0} حساب`} actions={
         <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); setQuery(q); setPage(1); }}>
-          <input className="input" placeholder="Search email or name" value={q} onChange={(e) => setQ(e.target.value)} />
-          <button className="btn-outline">Search</button>
+          <input className="input" placeholder="ابحث بالبريد أو الاسم" value={q} onChange={(e) => setQ(e.target.value)} />
+          <button className="btn-outline">بحث</button>
         </form>
       } />
-      <Table head={["User", "Role", "Plan", "Activity", "Joined", ""]} empty={data?.users.length === 0}>
+      <Table head={["المستخدم", "الدور", "الباقة", "النشاط", "تاريخ الانضمام", ""]} empty={data?.users.length === 0}>
         {data?.users.map((u) => (
           <tr key={u.id} className="align-top">
             <td className="px-3 py-2.5">
-              <div className="font-medium">{u.email}</div>
-              <div className="text-xs text-slate-500">{u.name ?? "—"} · {u.emailVerifiedAt ? "verified" : "unverified"}{u.disabled && <span className="text-red-300"> · disabled</span>}</div>
+              <div className="font-medium"><bdi dir="ltr">{u.email}</bdi></div>
+              <div className="text-xs text-slate-500"><bdi>{u.name ?? "—"}</bdi> · {u.emailVerifiedAt ? "مؤكَّد" : "غير مؤكَّد"}{u.disabled && <span className="text-red-300"> · معطّل</span>}</div>
             </td>
-            <td className="px-3 py-2.5 text-xs">{u.role}</td>
-            <td className="px-3 py-2.5 text-xs">{u.subscription ? `${u.subscription.plan.name} (${u.subscription.status.toLowerCase()}, ${u.subscription.provider})` : "Free"}{u.subscription?.currentPeriodEnd && <div className="text-slate-500">until {fmtDate(u.subscription.currentPeriodEnd)}</div>}</td>
-            <td className="px-3 py-2.5 text-xs text-slate-400">{u._count.conversations} chats · {u._count.usage} requests</td>
+            <td className="px-3 py-2.5 text-xs">{({ OWNER: "المالك", ADMIN: "مسؤول", USER: "مستخدم" } as Record<string, string>)[u.role] ?? u.role}</td>
+            <td className="px-3 py-2.5 text-xs">{u.subscription ? `${u.subscription.plan.name} (${u.subscription.status === "ACTIVE" ? "نشط" : u.subscription.status}، ${u.subscription.provider === "manual" ? "يدوي" : u.subscription.provider})` : "مجانية"}{u.subscription?.currentPeriodEnd && <div className="text-slate-500">حتى {fmtDate(u.subscription.currentPeriodEnd)}</div>}</td>
+            <td className="px-3 py-2.5 text-xs text-slate-400">{u._count.conversations} محادثة · {u._count.usage} طلب</td>
             <td className="px-3 py-2.5 text-xs">{fmtDate(u.createdAt)}</td>
             <td className="px-3 py-2.5">
               {u.role !== "OWNER" && (
                 <div className="flex flex-wrap justify-end gap-1">
-                  {!u.emailVerifiedAt && <button className="btn-outline px-2 py-1 text-xs" onClick={() => patch(u, { verifyEmail: true }, "Email marked verified")}>Verify</button>}
-                  <button className="btn-outline px-2 py-1 text-xs" onClick={() => patch(u, { role: u.role === "ADMIN" ? "USER" : "ADMIN" }, "Role updated")}>{u.role === "ADMIN" ? "Revoke admin" : "Make admin"}</button>
-                  <button className="btn-outline px-2 py-1 text-xs" onClick={() => setGrant(u)}>Grant plan</button>
-                  <button className="btn-outline px-2 py-1 text-xs" onClick={() => patch(u, { disabled: !u.disabled }, u.disabled ? "User enabled" : "User disabled")}>{u.disabled ? "Enable" : "Disable"}</button>
-                  <button className="btn-ghost px-2 py-1 text-xs text-red-300" onClick={() => confirm(`Delete ${u.email} and all their data?`) && run("d", () => api(`/api/admin/users/${u.id}`, { method: "DELETE" }), "User deleted").then(() => reload())}>Delete</button>
+                  {!u.emailVerifiedAt && <button className="btn-outline px-2 py-1 text-xs" onClick={() => patch(u, { verifyEmail: true }, "تم تأكيد البريد")}>تأكيد البريد</button>}
+                  <button className="btn-outline px-2 py-1 text-xs" onClick={() => patch(u, { role: u.role === "ADMIN" ? "USER" : "ADMIN" }, "تم تحديث الدور")}>{u.role === "ADMIN" ? "سحب صلاحية المسؤول" : "تعيين كمسؤول"}</button>
+                  <button className="btn-outline px-2 py-1 text-xs" onClick={() => setGrant(u)}>منح باقة</button>
+                  <button className="btn-outline px-2 py-1 text-xs" onClick={() => patch(u, { disabled: !u.disabled }, u.disabled ? "تم تفعيل المستخدم" : "تم تعطيل المستخدم")}>{u.disabled ? "تفعيل" : "تعطيل"}</button>
+                  <button className="btn-ghost px-2 py-1 text-xs text-red-300" onClick={() => confirm(`حذف ${u.email} وكل بياناته؟`) && run("d", () => api(`/api/admin/users/${u.id}`, { method: "DELETE" }), "تم حذف المستخدم").then(() => reload())}>حذف</button>
                 </div>
               )}
             </td>
@@ -52,18 +52,18 @@ export default function UsersPage() {
         ))}
       </Table>
       <div className="mt-3 flex justify-end gap-2">
-        <button className="btn-outline px-2.5 py-1" disabled={page === 1} onClick={() => setPage(page - 1)}>Prev</button>
-        <button className="btn-outline px-2.5 py-1" disabled={(data?.users.length ?? 0) < 50} onClick={() => setPage(page + 1)}>Next</button>
+        <button className="btn-outline px-2.5 py-1" disabled={page === 1} onClick={() => setPage(page - 1)}>السابق</button>
+        <button className="btn-outline px-2.5 py-1" disabled={(data?.users.length ?? 0) < 50} onClick={() => setPage(page + 1)}>التالي</button>
       </div>
-      <Modal open={!!grant} onClose={() => setGrant(null)} title={`Grant plan to ${grant?.email}`}>
-        <p className="mb-3 text-sm text-slate-400">Manual (complimentary) access, e.g. for support or testing. Paid subscriptions are managed by the payment provider.</p>
+      <Modal open={!!grant} onClose={() => setGrant(null)} title={`منح باقة لـ ${grant?.email ?? ""}`}>
+        <p className="mb-3 text-sm text-slate-400">وصول يدوي مجاني، مثلًا للدعم أو التجربة. الاشتراكات المدفوعة يديرها مزوّد الدفع.</p>
         <div className="grid grid-cols-2 gap-3">
           <select className="input" value={grantPlan} onChange={(e) => setGrantPlan(e.target.value)}>{plans.data?.plans.map((p) => <option key={p.key} value={p.key}>{p.name}</option>)}</select>
-          <input className="input" type="number" min={1} value={grantDays} onChange={(e) => setGrantDays(Number(e.target.value))} aria-label="Days" />
+          <input className="input" type="number" min={1} value={grantDays} onChange={(e) => setGrantDays(Number(e.target.value))} aria-label="عدد الأيام" />
         </div>
         <div className="mt-4 flex justify-end gap-2">
-          <button className="btn-ghost" onClick={() => { patch(grant!, { grantPlanKey: null }, "Manual plan removed"); setGrant(null); }}>Remove grant</button>
-          <button className="btn-primary" onClick={() => { patch(grant!, { grantPlanKey: grantPlan, grantDays }, `Granted ${grantPlan} for ${grantDays} days`); setGrant(null); }}>Grant</button>
+          <button className="btn-ghost" onClick={() => { patch(grant!, { grantPlanKey: null }, "تم إلغاء المنح اليدوي"); setGrant(null); }}>إلغاء المنح</button>
+          <button className="btn-primary" onClick={() => { patch(grant!, { grantPlanKey: grantPlan, grantDays }, `تم منح ${grantPlan} لمدة ${grantDays} يوم`); setGrant(null); }}>منح</button>
         </div>
       </Modal>
     </>

@@ -12,7 +12,7 @@ function Verify() {
   useEffect(() => {
     if (!token) {
       setState("error");
-      setMsg("Missing verification token.");
+      setMsg("رابط التأكيد غير مكتمل.");
       return;
     }
     api("/api/auth/verify", { body: { token } })
@@ -22,14 +22,14 @@ function Verify() {
         setMsg(e.message);
       });
   }, [token]);
-  if (state === "pending") return <p className="text-sm text-slate-400">Verifying…</p>;
-  if (state === "ok") return <p className="text-sm text-slate-300">Your email is verified. <Link className="text-brand-400" href="/">Start chatting →</Link></p>;
+  if (state === "pending") return <p className="text-sm text-slate-400">جارٍ التأكيد…</p>;
+  if (state === "ok") return <p className="text-sm text-slate-300">تم تأكيد بريدك الإلكتروني. <Link className="text-brand-400" href="/">ابدأ المحادثة ←</Link></p>;
   return <p className="text-sm text-red-300">{msg}</p>;
 }
 
 export default function VerifyPage() {
   return (
-    <AuthShell title="Email verification">
+    <AuthShell title="تأكيد البريد الإلكتروني">
       <Suspense>
         <Verify />
       </Suspense>

@@ -7,7 +7,7 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+        <h1 className="text-2xl font-semibold">{title}</h1>
         {subtitle && <p className="mt-1 text-sm text-slate-400">{subtitle}</p>}
       </div>
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
@@ -19,7 +19,7 @@ export function Stat({ label, value, hint, tone }: { label: string; value: React
   const color = tone === "ok" ? "text-emerald-300" : tone === "warn" ? "text-amber-300" : tone === "err" ? "text-red-300" : "text-white";
   return (
     <div className="card p-4">
-      <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="text-xs text-slate-500">{label}</p>
       <p className={`mt-1 text-2xl font-semibold ${color}`}>{value}</p>
       {hint && <p className="mt-0.5 text-xs text-slate-500">{hint}</p>}
     </div>
@@ -33,10 +33,11 @@ export function HealthBadge({ status }: { status: string }) {
     DOWN: "bg-red-500/15 text-red-300",
     UNKNOWN: "bg-slate-500/15 text-slate-300",
   };
-  return <span className={`badge ${map[status] ?? map.UNKNOWN}`}>● {status.toLowerCase()}</span>;
+  const label: Record<string, string> = { HEALTHY: "سليم", DEGRADED: "متعثّر", DOWN: "متوقف", UNKNOWN: "غير معروف" };
+  return <span className={`badge ${map[status] ?? map.UNKNOWN}`}>● {label[status] ?? status}</span>;
 }
 
-export function OnOff({ on, onLabel = "enabled", offLabel = "disabled" }: { on: boolean; onLabel?: string; offLabel?: string }) {
+export function OnOff({ on, onLabel = "مفعّل", offLabel = "معطّل" }: { on: boolean; onLabel?: string; offLabel?: string }) {
   return <span className={`badge ${on ? "bg-emerald-500/15 text-emerald-300" : "bg-slate-500/15 text-slate-400"}`}>{on ? onLabel : offLabel}</span>;
 }
 
@@ -92,12 +93,12 @@ export function Table({ head, children, empty }: { head: React.ReactNode[]; chil
   return (
     <div className="overflow-x-auto rounded-xl border border-ink-600">
       <table className="w-full min-w-[640px] text-sm">
-        <thead className="bg-ink-850 text-left text-xs uppercase tracking-wide text-slate-500">
+        <thead className="bg-ink-850 text-start text-xs text-slate-500">
           <tr>{head.map((h, i) => <th key={i} className="px-3 py-2.5 font-medium">{h}</th>)}</tr>
         </thead>
         <tbody className="divide-y divide-ink-700">{children}</tbody>
       </table>
-      {empty && <p className="p-6 text-center text-sm text-slate-500">Nothing here yet.</p>}
+      {empty && <p className="p-6 text-center text-sm text-slate-500">لا يوجد شيء هنا بعد.</p>}
     </div>
   );
 }

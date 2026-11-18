@@ -160,7 +160,7 @@ export class OpenAICompatibleAdapter implements ProviderAdapter {
     const t0 = Date.now();
     try {
       const models = await this.listModels();
-      return { ok: true, latencyMs: Date.now() - t0, detail: `Connected. ${models.length} models available.`, info: { modelCount: models.length } };
+      return { ok: true, latencyMs: Date.now() - t0, detail: `تم الاتصال. ${models.length} نموذج متاح.`, info: { modelCount: models.length } };
     } catch (e) {
       return { ok: false, latencyMs: Date.now() - t0, detail: (e as Error).message };
     }

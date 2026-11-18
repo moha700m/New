@@ -19,3 +19,5 @@ export interface PlanRow {
   dailyMessageLimit: number | null; monthlyMessageLimit: number | null; monthlyTokenLimit: number | null; maxUploadMb: number; allowUploads: boolean; allowWebSearch: boolean;
   allowImageGeneration: boolean; allowAllModels: boolean; isDefault: boolean; active: boolean; sortOrder: number; modelIds: string[]; subscriberCount: number;
 }
+
+export const CATEGORY_LABEL: Record<string, string> = { TEXT: "عام", REASONING: "تفكير", CODE: "برمجة", VISION: "رؤية", IMAGE: "توليد صور" };

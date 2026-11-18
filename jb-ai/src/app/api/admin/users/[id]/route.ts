@@ -15,10 +15,10 @@ const schema = z.object({
 export const PATCH = adminRoute<{ id: string }>(async ({ req, params, user, log }) => {
   const body = await parseBody(req, schema);
   const target = await prisma.user.findUnique({ where: { id: params.id }, include: { subscription: true } });
-  if (!target) throw new HttpError(404, "User not found");
-  if (target.role === "OWNER") throw new HttpError(403, "The owner account cannot be modified");
-  if (body.role && user.role !== "OWNER") throw new HttpError(403, "Only the owner can change roles");
-  if (target.id === user.id && (body.disabled || body.role)) throw new HttpError(400, "You cannot change your own role or disable yourself");
+  if (!target) throw new HttpError(404, "المستخدم غير موجود");
+  if (target.role === "OWNER") throw new HttpError(403, "لا يمكن تعديل حساب المالك");
+  if (body.role && user.role !== "OWNER") throw new HttpError(403, "المالك فقط يمكنه تغيير الأدوار");
+  if (target.id === user.id && (body.disabled || body.role)) throw new HttpError(400, "لا يمكنك تغيير دورك أو تعطيل حسابك بنفسك");
   await prisma.user.update({
     where: { id: target.id },
     data: {
@@ -30,13 +30,13 @@ export const PATCH = adminRoute<{ id: string }>(async ({ req, params, user, log 
   if (body.disabled) await prisma.session.deleteMany({ where: { userId: target.id } });
   if (body.grantPlanKey !== undefined) {
     if (target.subscription?.providerSubscriptionId && ["ACTIVE", "TRIALING", "PAST_DUE"].includes(target.subscription.status)) {
-      throw new HttpError(400, "User has a paid subscription managed by the payment provider; change it there.");
+      throw new HttpError(400, "لدى المستخدم اشتراك مدفوع يديره مزوّد الدفع؛ غيّره من هناك.");
     }
     if (body.grantPlanKey === null) {
       await prisma.subscription.deleteMany({ where: { userId: target.id, providerSubscriptionId: null } });
     } else {
       const plan = await prisma.plan.findUnique({ where: { key: body.grantPlanKey } });
-      if (!plan) throw new HttpError(404, "Plan not found");
+      if (!plan) throw new HttpError(404, "الباقة غير موجودة");
       const end = new Date(Date.now() + (body.grantDays ?? 30) * 864e5);
       await prisma.subscription.upsert({
         where: { userId: target.id },
@@ -51,9 +51,9 @@ export const PATCH = adminRoute<{ id: string }>(async ({ req, params, user, log 
 
 export const DELETE = adminRoute<{ id: string }>(async ({ params, user, log }) => {
   const target = await prisma.user.findUnique({ where: { id: params.id } });
-  if (!target) throw new HttpError(404, "User not found");
-  if (target.role === "OWNER" || target.id === user.id) throw new HttpError(403, "This account cannot be deleted");
-  if (target.role === "ADMIN" && user.role !== "OWNER") throw new HttpError(403, "Only the owner can delete administrators");
+  if (!target) throw new HttpError(404, "المستخدم غير موجود");
+  if (target.role === "OWNER" || target.id === user.id) throw new HttpError(403, "لا يمكن حذف هذا الحساب");
+  if (target.role === "ADMIN" && user.role !== "OWNER") throw new HttpError(403, "المالك فقط يمكنه حذف المسؤولين");
   await prisma.user.delete({ where: { id: target.id } });
   await log("user.delete", { entityType: "user", entityId: target.id, details: { email: target.email } });
   return json({ ok: true });

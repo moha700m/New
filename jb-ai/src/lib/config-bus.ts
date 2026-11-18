@@ -16,6 +16,9 @@ import { prisma } from "./db";
 
 type Listener = (version: number) => void;
 
+/** On serverless platforms (Vercel) there is no long-lived process: read the version per request instead of LISTEN/poll loops. */
+export const SERVERLESS = Boolean(process.env.VERCEL);
+
 interface BusState {
   version: number;
   listeners: Set<Listener>;
@@ -32,6 +35,21 @@ const bus: BusState = (g.__jbConfigBus ??= {
   pgClient: null,
   invalidators: new Set(),
 });
+
+let memo: { at: number; v: number } | null = null;
+
+/** Current config version, always fresh: memoised for 1s on serverless, bus-backed on long-running servers. */
+export async function freshVersion(): Promise<number> {
+  if (!SERVERLESS) {
+    ensureBusStarted();
+    return bus.version || readVersion();
+  }
+  if (memo && Date.now() - memo.at < 1000) return memo.v;
+  const v = await readVersion();
+  if (v !== bus.version) setVersion(v);
+  memo = { at: Date.now(), v };
+  return v;
+}
 
 export async function readVersion(): Promise<number> {
   const row = await prisma.configState.upsert({ where: { id: "global" }, create: { id: "global", version: 1 }, update: {} });
@@ -79,6 +97,7 @@ async function connectListener() {
 export function ensureBusStarted() {
   if (bus.started) return;
   bus.started = true;
+  if (SERVERLESS) return;
   readVersion().then(setVersion).catch(() => {});
   void connectListener();
   const t = setInterval(() => {
@@ -109,6 +128,8 @@ export async function bumpConfigVersion(): Promise<number> {
     update: { version: { increment: 1 } },
   });
   setVersion(row.version);
+  memo = null;
+  if (SERVERLESS) return row.version;
   try {
     await prisma.$executeRawUnsafe(`SELECT pg_notify('jb_config', $1)`, String(row.version));
   } catch (e) {

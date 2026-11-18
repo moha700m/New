@@ -7,10 +7,10 @@ import { setModelPlans } from "@/lib/model-admin";
 export const PATCH = adminRoute<{ id: string }>(async ({ req, params, log, publish }) => {
   const { planKeys, ...body } = await parseBody(req, modelPatchSchema);
   const cur = await prisma.aiModel.findUnique({ where: { id: params.id } });
-  if (!cur) throw new HttpError(404, "Model not found");
+  if (!cur) throw new HttpError(404, "النموذج غير موجود");
   if (body.modelId && body.modelId !== cur.modelId) {
     const dup = await prisma.aiModel.findUnique({ where: { providerId_modelId: { providerId: cur.providerId, modelId: body.modelId } } });
-    if (dup) throw new HttpError(409, "Another entry already uses this model ID");
+    if (dup) throw new HttpError(409, "معرّف النموذج مستخدم في عنصر آخر");
   }
   const m = await prisma.aiModel.update({ where: { id: params.id }, data: body });
   if (planKeys) await setModelPlans(m.id, planKeys);
@@ -24,7 +24,7 @@ export const PATCH = adminRoute<{ id: string }>(async ({ req, params, log, publi
 
 export const DELETE = adminRoute<{ id: string }>(async ({ params, log, publish }) => {
   const m = await prisma.aiModel.findUnique({ where: { id: params.id } });
-  if (!m) throw new HttpError(404, "Model not found");
+  if (!m) throw new HttpError(404, "النموذج غير موجود");
   const r = await prisma.routingConfig.findUnique({ where: { id: "global" } });
   if (r) {
     const fields = ["defaultTextModelId", "defaultReasoningModelId", "defaultCodingModelId", "defaultVisionModelId", "defaultImageModelId", "fallbackModelId"] as const;

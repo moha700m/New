@@ -10,7 +10,7 @@ export function Toggle({ checked, onChange, label, disabled, hint }: { checked: 
         onClick={() => onChange(!checked)}
         className={`relative h-5 w-9 shrink-0 rounded-full transition ${checked ? "bg-brand-500" : "bg-ink-500"}`}
       >
-        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition ${checked ? "left-[18px]" : "left-0.5"}`} />
+        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition ${checked ? "start-[18px]" : "start-0.5"}`} />
       </button>
       {label && (
         <span className="text-sm">

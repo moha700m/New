@@ -44,7 +44,7 @@ export function Composer(props: {
 
   async function upload(files: FileList | File[]) {
     if (props.onRequireAuth) return props.onRequireAuth();
-    if (!props.uploadsAllowed) return toast("File uploads are not included in your plan.", "err");
+    if (!props.uploadsAllowed) return toast("رفع الملفات غير متاح في باقتك.", "err");
     for (const file of Array.from(files).slice(0, 8)) {
       setUploading((n) => n + 1);
       try {
@@ -52,7 +52,7 @@ export function Composer(props: {
         fd.append("file", file);
         const res = await fetch("/api/uploads", { method: "POST", body: fd });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Upload failed");
+        if (!res.ok) throw new Error(data.error || "فشل رفع الملف");
         const a = data.attachment;
         setAtts((x) => [...x, { ...a, previewUrl: a.kind === "image" ? URL.createObjectURL(file) : undefined }]);
       } catch (e) {
@@ -83,10 +83,10 @@ export function Composer(props: {
       {atts.length > 0 && (
         <div className="flex flex-wrap gap-2 px-3 pt-3">
           {atts.map((a) => (
-            <div key={a.id} className="group relative flex items-center gap-2 rounded-lg border border-ink-600 bg-ink-800 py-1 pl-1 pr-2 text-xs">
-              {a.previewUrl ? <img src={a.previewUrl} alt="" className="h-9 w-9 rounded object-cover" /> : <FileText size={18} className="ml-1 text-slate-400" />}
+            <div key={a.id} className="group relative flex items-center gap-2 rounded-lg border border-ink-600 bg-ink-800 py-1 ps-1 pe-2 text-xs">
+              {a.previewUrl ? <img src={a.previewUrl} alt="" className="h-9 w-9 rounded object-cover" /> : <FileText size={18} className="ms-1 text-slate-400" />}
               <span className="max-w-[140px] truncate">{a.filename}</span>
-              <button className="text-slate-400 hover:text-white" onClick={() => setAtts((x) => x.filter((y) => y.id !== a.id))} aria-label={`Remove ${a.filename}`}>
+              <button className="text-slate-400 hover:text-white" onClick={() => setAtts((x) => x.filter((y) => y.id !== a.id))} aria-label={`إزالة ${a.filename}`}>
                 <X size={14} />
               </button>
             </div>
@@ -113,13 +113,14 @@ export function Composer(props: {
             submit();
           }
         }}
-        placeholder={props.placeholder ?? "Ask anything"}
+        placeholder={props.placeholder ?? "اسأل أي شيء"}
+        dir="auto"
         className="block max-h-60 w-full resize-none bg-transparent px-4 pb-1 pt-3.5 text-[15px] text-slate-100 outline-none placeholder:text-slate-500"
         data-testid="composer-input"
       />
       <div className="flex items-center gap-1 px-2 pb-2 pt-1">
         <input ref={fileRef} type="file" multiple hidden onChange={(e) => e.target.files && upload(e.target.files).then(() => (e.target.value = ""))} />
-        <button className="btn-ghost h-9 w-9 p-0" onClick={() => (props.onRequireAuth ? props.onRequireAuth() : fileRef.current?.click())} aria-label="Attach files" title="Attach images or text files">
+        <button className="btn-ghost h-9 w-9 p-0" onClick={() => (props.onRequireAuth ? props.onRequireAuth() : fileRef.current?.click())} aria-label="إرفاق ملفات" title="أرفق صورًا أو ملفات نصية">
           {uploading ? <Loader2 size={18} className="animate-spin" /> : <Plus size={19} />}
         </button>
         {props.thinkAvailable && (
@@ -127,24 +128,24 @@ export function Composer(props: {
             className={`btn h-9 px-2.5 ${props.think ? "bg-brand-500/20 text-brand-400" : "text-slate-300 hover:bg-ink-700"}`}
             onClick={() => props.setThink(!props.think)}
             aria-pressed={props.think}
-            title="Think: use a reasoning model for harder problems"
+            title="تفكير: استخدم نموذج تفكير للمسائل الأصعب"
           >
-            <Lightbulb size={16} /> <span className="hidden sm:inline">Think</span>
+            <Lightbulb size={16} /> <span className="hidden sm:inline">تفكير</span>
           </button>
         )}
         {props.searchAvailable && (
           <button
             className={`btn h-9 px-2.5 ${props.search ? "bg-brand-500/20 text-brand-400" : "text-slate-300 hover:bg-ink-700"}`}
-            onClick={() => (props.searchLocked ? toast("Web search is available on paid plans.", "info") : props.setSearch(!props.search))}
+            onClick={() => (props.searchLocked ? toast("البحث في الويب متاح في الباقات المدفوعة.", "info") : props.setSearch(!props.search))}
             aria-pressed={props.search}
-            title={props.searchLocked ? "Upgrade to use web search" : "Search the web"}
+            title={props.searchLocked ? "رقِّ باقتك لاستخدام البحث في الويب" : "ابحث في الويب"}
           >
-            <Globe size={16} /> <span className="hidden sm:inline">Search</span>
+            <Globe size={16} /> <span className="hidden sm:inline">بحث</span>
           </button>
         )}
         <div className="flex-1" />
         {props.streaming ? (
-          <button className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-ink-950 hover:bg-slate-200" onClick={props.onStop} aria-label="Stop generating" data-testid="stop-button">
+          <button className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-ink-950 hover:bg-slate-200" onClick={props.onStop} aria-label="إيقاف التوليد" data-testid="stop-button">
             <Square size={14} fill="currentColor" />
           </button>
         ) : (
@@ -152,7 +153,7 @@ export function Composer(props: {
             className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-500 text-white transition hover:bg-brand-600 disabled:bg-ink-600 disabled:text-slate-400"
             onClick={submit}
             disabled={(!text.trim() && !atts.length) || uploading > 0 || props.disabled}
-            aria-label="Send message"
+            aria-label="إرسال الرسالة"
             data-testid="send-button"
           >
             <ArrowUp size={18} />
