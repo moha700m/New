@@ -11,6 +11,7 @@ import { MessageView, type UiMessage } from "./MessageView";
 import { ModelPicker } from "./ModelPicker";
 import { ConnectorsSheet } from "./ConnectorsSheet";
 import { SpendMeter } from "./SpendMeter";
+import { type ModeKey, type ModeOption } from "./ModeMenu";
 import { useMentionCatalog, type MentionItem } from "./Mentions";
 import { Sidebar, type ConvItem, type MeInfo } from "./Sidebar";
 
@@ -466,6 +467,28 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
     }
   }
 
+  // role picker: each role → the default model the admin set for it (Admin → الافتراضيات)
+  const modeOptions: ModeOption[] = (["text", "reasoning", "code", "vision", "image"] as ModeKey[])
+    .map((key) => {
+      const id = key === "image" ? imageDefault : (config?.defaults[key] ?? null);
+      const m = id ? models.find((x) => x.id === id) : undefined;
+      return m ? { key, modelId: m.id, modelName: m.name } : null;
+    })
+    .filter((x): x is ModeOption => Boolean(x));
+  const activeMode: ModeKey | null = current?.capabilities.imageGeneration
+    ? "image"
+    : think && modeOptions.some((o) => o.key === "reasoning" && o.modelId === current?.id)
+      ? "reasoning"
+      : (modeOptions.find((o) => o.modelId === current?.id && o.key !== "image" && (o.key !== "reasoning" || think))?.key ?? (current ? null : "text"));
+  function pickMode(o: ModeOption) {
+    if (o.key === "image") {
+      if (!current?.capabilities.imageGeneration) lastTextModel.current = current?.id ?? null;
+    } else if (o.key === "reasoning") setThink(true);
+    else setThink(false);
+    if (o.key !== "text" && o.key !== "image" && agentOn && o.key !== "code") setAgent(false);
+    chooseModel(o.modelId);
+  }
+
   function chooseModel(id: string) {
     setSelectedModel(id);
     try {
@@ -481,6 +504,9 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
     <Composer
       onSend={send}
       mentionItems={isAdmin && agentAvailable ? mentionCatalog.items : undefined}
+      modes={signedIn ? modeOptions : undefined}
+      activeMode={activeMode}
+      onPickMode={pickMode}
       onMentionOpen={() => void mentionCatalog.reload()}
       onStop={() => void stopRun()}
       streaming={streaming}

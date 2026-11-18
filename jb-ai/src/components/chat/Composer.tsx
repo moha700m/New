@@ -2,6 +2,7 @@
 import { ArrowUp, Bot, Check, FileText, Globe, ImageIcon, Lightbulb, Loader2, Paperclip, Plug, Plus, Square, X, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useToast } from "../ui/Toast";
+import { ModeMenu, type ModeKey, type ModeOption } from "./ModeMenu";
 import { filterMentions, MentionChip, MentionPopover, type MentionItem } from "./Mentions";
 
 export interface PendingAttachment {
@@ -17,6 +18,10 @@ export function Composer(props: {
   /** @mention catalog (owner only); empty = mentions off */
   mentionItems?: MentionItem[];
   onMentionOpen?: () => void;
+  /** role picker next to send (نصوص / تفكير / برمجة / رؤية / صور) */
+  modes?: ModeOption[];
+  activeMode?: ModeKey | null;
+  onPickMode?: (m: ModeOption) => void;
   onStop: () => void;
   streaming: boolean;
   disabled?: boolean;
@@ -259,6 +264,7 @@ export function Composer(props: {
           {props.search && props.searchAvailable && <Chip icon={Globe} label="بحث" cls="bg-brand-500/15 text-brand-400" onOff={() => props.setSearch(false)} />}
         </div>
         <div className="flex-1" />
+        {props.modes?.length && props.onPickMode ? <ModeMenu modes={props.modes} active={props.activeMode ?? null} onPick={props.onPickMode} disabled={props.streaming} /> : null}
         {props.streaming ? (
           <button className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-ink-950 hover:bg-slate-200" onClick={props.onStop} aria-label="إيقاف التوليد" data-testid="stop-button">
             <Square size={14} fill="currentColor" />
