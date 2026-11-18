@@ -11,12 +11,12 @@ const securityHeaders = [
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob:",
+      "img-src 'self' data: blob: https://avatars.githubusercontent.com",
       "font-src 'self' data:",
       "connect-src 'self'",
       "frame-ancestors 'none'",
       "base-uri 'self'",
-      "form-action 'self' https://checkout.stripe.com https://billing.stripe.com",
+      "form-action 'self' https://checkout.stripe.com https://billing.stripe.com https://github.com",
     ].join("; "),
   },
 ];
@@ -24,7 +24,8 @@ const nextConfig = {
   poweredByHeader: false,
   serverExternalPackages: ["pg", "bcryptjs", "nodemailer"],
   async headers() {
-    return [{ source: "/(.*)", headers: securityHeaders }];
+    // /s/* = agent-published sites; they get their own sandboxed CSP from the route.
+    return [{ source: "/((?!s/).*)", headers: securityHeaders }];
   },
 };
 export default nextConfig;

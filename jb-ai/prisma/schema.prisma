@@ -138,6 +138,7 @@ model Message {
   providerName   String?
   usedFallback   Boolean      @default(false)
   agentSteps     Json?
+  costUsd        Float?
   createdAt      DateTime     @default(now())
   attachments    Attachment[]
 
@@ -423,6 +424,7 @@ model OAuthState {
 
 /// The owner's GitHub App (created via the manifest flow) + the connected user's tokens. Singleton row id="global".
 model GithubConnection {
+  appOwner               String?
   id                    String    @id @default("global")
   appId                 Int?
   appSlug               String?
@@ -442,3 +444,28 @@ model GithubConnection {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 }
+
+/// Every step of a connect flow (start, provider callback, success/failure) — so a failed "ربط" can be diagnosed.
+model ConnectEvent {
+  id        String   @id @default(cuid())
+  kind      String // github | mcp
+  step      String // start | callback | done | error
+  target    String? // connector slug / app name
+  ok        Boolean  @default(true)
+  message   String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+/// Static sites published by the agent (served sandboxed at /s/<slug>/).
+model Site {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  title     String
+  files     Json // { "index.html": "...", "style.css": "..." }
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+

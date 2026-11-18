@@ -8,7 +8,9 @@ import { useToast } from "../ui/Toast";
 import { useLiveConfig } from "../useLiveConfig";
 import { Composer, type PendingAttachment } from "./Composer";
 import { MessageView, type UiMessage } from "./MessageView";
-import { isFreeModel, isRegularModel, isUncensoredModel, ModelSelector } from "./ModelSelector";
+import { ModelPicker } from "./ModelPicker";
+import { ConnectorsSheet } from "./ConnectorsSheet";
+import { SpendMeter } from "./SpendMeter";
 import { Sidebar, type ConvItem, type MeInfo } from "./Sidebar";
 
 const MODEL_KEY = "jb.selectedModel";
@@ -28,6 +30,9 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
   const [agent, setAgent] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [connectorsOpen, setConnectorsOpen] = useState(false);
+  const [connectorsCount, setConnectorsCount] = useState(0);
+  const [spendKey, setSpendKey] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
@@ -88,6 +93,16 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
   const searchAvailable = Boolean(current?.capabilities.webSearch);
   const searchLocked = signedIn && !me?.plan?.allowWebSearch;
   const agentAvailable = signedIn && !current?.capabilities.imageGeneration;
+  const isAdmin = Boolean(me?.user?.isAdmin);
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const c = q.get("connected");
+    if (c) {
+      toast(`تم ربط ${c} ✓ — شغّل «وضع الوكيل» واستخدمه`, "ok");
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const agentOn = agent && agentAvailable;
 
   // ---- conversation loading
@@ -199,7 +214,8 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
           } else if (ev.type === "image") {
             patchMessage(assistantId, (m) => ({ ...m, attachments: [...(m.attachments ?? []), { id: ev.attachmentId, filename: "generated", mimeType: ev.mimeType, kind: "generated-image" }] }));
           } else if (ev.type === "done") {
-            patchMessage(assistantId, (m) => ({ ...m, status: ev.status, modelName: ev.model?.name ?? m.modelName }));
+            patchMessage(assistantId, (m) => ({ ...m, status: ev.status, modelName: ev.model?.name ?? m.modelName, costUsd: ev.costUsd ?? m.costUsd }));
+            setSpendKey((k) => k + 1);
           } else if (ev.type === "error") {
             patchMessage(assistantId, (m) => ({ ...m, status: "error", error: ev.error }));
           }
@@ -322,6 +338,8 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
       agent={agentOn}
       setAgent={agentAvailable ? setAgent : undefined}
       onToggleImage={signedIn && (imageDefault || current?.capabilities.imageGeneration) ? toggleImageMode : undefined}
+      onOpenConnectors={isAdmin ? () => setConnectorsOpen(true) : undefined}
+      connectorsCount={connectorsCount}
       autoFocus
       disabled={config?.site.maintenanceMode}
     />
@@ -348,19 +366,12 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
           <button className="btn-ghost p-2 md:hidden" onClick={() => setSidebarOpen(true)} aria-label="فتح القائمة">
             <Menu size={20} />
           </button>
-          <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] sm:overflow-visible">
-            <ModelSelector models={models.filter(isRegularModel)} value={selectedModel} onChange={chooseModel} defaultId={defaultId} signedIn={signedIn} />
-            {models.some(isUncensoredModel) && (
-              <ModelSelector variant="uncensored" models={models.filter(isUncensoredModel)} value={selectedModel} onChange={chooseModel} defaultId={defaultId} signedIn={signedIn} />
-            )}
-            {models.some(isFreeModel) && (
-              <ModelSelector variant="free" models={models.filter(isFreeModel)} value={selectedModel} onChange={chooseModel} defaultId={defaultId} signedIn={signedIn} />
-            )}
-          </div>
+          <ModelPicker models={models} value={selectedModel} onChange={chooseModel} defaultId={defaultId} signedIn={signedIn} />
           <span className="hidden items-center gap-1 text-[11px] text-slate-500 sm:flex" title={connected ? "متصل بالتحديثات المباشرة" : "جارٍ إعادة الاتصال بالتحديثات المباشرة"}>
             {connected ? <Wifi size={12} className="text-emerald-400" /> : <WifiOff size={12} />}
           </span>
           <div className="flex-1" />
+          {isAdmin && <SpendMeter refreshKey={spendKey} />}
           {!signedIn && me && (
             <div className="flex items-center gap-2">
               <Link href="/plans" className="hidden text-sm text-brand-400 hover:text-brand-400/80 sm:block">الباقات</Link>
@@ -418,6 +429,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
           </>
         )}
       </main>
+      {isAdmin && <ConnectorsSheet open={connectorsOpen} onClose={() => setConnectorsOpen(false)} onCount={setConnectorsCount} />}
     </div>
   );
 }

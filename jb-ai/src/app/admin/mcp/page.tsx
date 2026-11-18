@@ -5,6 +5,7 @@ import { api, fmtDate } from "@/components/api";
 import { Field, OnOff, PageHeader, Table, useAction, useAdmin } from "@/components/admin/ui";
 import { Modal } from "@/components/ui/Modal";
 import { Toggle } from "@/components/ui/Toggle";
+import { AddConnector } from "@/components/chat/AddConnector";
 
 type Server = {
   id: string; slug: string; name: string; url: string; transport: string; authHeader: string; authScheme: string; authType: string;
@@ -13,6 +14,7 @@ type Server = {
   connectedAt: string | null; connectedAs: string | null; oauthIssuer: string | null; tokenExpiresAt: string | null;
 };
 type Preset = { key: string; name: string; url: string; desc: string };
+type ConnectEvent = { id: string; kind: string; step: string; target: string | null; ok: boolean; message: string | null; createdAt: string };
 type GithubState = { appCreated: boolean; appSlug: string | null; appName: string | null; appHtmlUrl: string | null; installUrl: string | null; connected: boolean; login: string | null; avatarUrl: string | null; connectedAt: string | null };
 
 const blank = { name: "", slug: "", url: "", transport: "auto", authHeader: "Authorization", authScheme: "Bearer", token: "", extraHeaders: "", toolFilter: "", enabled: true };
@@ -31,13 +33,13 @@ function authLabel(s: Server) {
 }
 
 export default function McpPage() {
-  const { data, reload } = useAdmin<{ servers: Server[]; presets: Preset[]; github: GithubState }>("/api/admin/mcp");
+  const { data, reload } = useAdmin<{ servers: Server[]; presets: Preset[]; github: GithubState; events: ConnectEvent[] }>("/api/admin/mcp");
   const { run, busy } = useAction();
   const [flash, setFlash] = useState<{ ok: boolean; text: string } | null>(null);
-  const [custom, setCustom] = useState({ name: "", url: "" });
   const [form, setForm] = useState<typeof blank | null>(null);
   const [editing, setEditing] = useState<Server | null>(null);
   const [openTools, setOpenTools] = useState<string | null>(null);
+  const [pending, setPending] = useState<string | null>(null);
   const gh = data?.github;
   const bySlug = new Map((data?.servers ?? []).map((s) => [s.slug, s]));
 
@@ -49,42 +51,22 @@ export default function McpPage() {
     if (q.toString()) window.history.replaceState(null, "", "/admin/mcp");
   }, []);
 
-  async function connect(body: { serverId?: string; preset?: string }, key: string) {
-    const r = await run(key, () => api<{ connected: boolean; authorizeUrl?: string; server?: Server }>("/api/admin/mcp/connect", { body }));
-    if (r?.authorizeUrl) window.location.href = r.authorizeUrl;
-    else if (r?.connected) {
-      setFlash({ ok: true, text: `تم الربط ✓ ${r.server?.name} — ${r.server?.toolCount} أداة (ما يحتاج تسجيل دخول)` });
-      void reload();
-    } else void reload();
+  // Full-page navigations (no fetch-then-redirect): reliable on mobile Safari and in-app browsers.
+  function connect(body: { serverId?: string; preset?: string }, key: string) {
+    setFlash(null);
+    setPending(key);
+    const q = new URLSearchParams({ back: "/admin/mcp", ...(body.serverId ? { id: body.serverId } : {}), ...(body.preset ? { preset: body.preset } : {}) });
+    window.location.href = `/api/connect/mcp?${q}`;
   }
 
-  async function githubCreateApp() {
-    const r = await run("gh-app", () => api<{ action: string; manifest: string }>("/api/admin/github/manifest", { body: {} }));
-    if (!r) return;
-    const f = document.createElement("form");
-    f.method = "post";
-    f.action = r.action;
-    const i = document.createElement("input");
-    i.type = "hidden";
-    i.name = "manifest";
-    i.value = r.manifest;
-    f.appendChild(i);
-    document.body.appendChild(f);
-    f.submit();
+  function githubCreateApp() {
+    setPending("gh-app");
+    window.location.href = "/api/connect/github?new=1&back=/admin/mcp";
   }
 
-  async function githubConnect() {
-    const r = await run("gh-conn", () => api<{ authorizeUrl: string }>("/api/admin/github/connect", { body: {} }));
-    if (r?.authorizeUrl) window.location.href = r.authorizeUrl;
-  }
-
-  async function addCustom() {
-    const slug = custom.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 31) || `mcp-${Date.now().toString(36)}`;
-    const r = await run("add", () => api<{ server: Server }>("/api/admin/mcp", { body: { name: custom.name || slug, slug, url: custom.url.trim(), transport: "auto" } }));
-    if (!r) return;
-    setCustom({ name: "", url: "" });
-    await reload();
-    await connect({ serverId: r.server.id }, `conn-${r.server.id}`);
+  function githubConnect() {
+    setPending("gh-conn");
+    window.location.href = "/api/connect/github?back=/admin/mcp";
   }
 
   function openEdit(s: Server) {
@@ -135,18 +117,18 @@ export default function McpPage() {
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
           {!gh?.appCreated && (
-            <button className="btn-primary" disabled={!data || busy === "gh-app"} onClick={githubCreateApp} data-testid="github-connect"><Github size={15} /> {busy === "gh-app" ? "جارٍ التحويل لـ GitHub…" : "ربط GitHub"}</button>
+            <button className="btn-primary" disabled={!data || pending === "gh-app"} onClick={githubCreateApp} data-testid="github-connect"><Github size={15} /> {pending === "gh-app" ? "جارٍ التحويل لـ GitHub…" : "ربط GitHub"}</button>
           )}
           {gh?.appCreated && !gh.connected && (
             <>
-              <button className="btn-primary" disabled={busy === "gh-conn"} onClick={githubConnect}><Link2 size={15} /> ربط الحساب</button>
+              <button className="btn-primary" disabled={pending === "gh-conn"} onClick={githubConnect}><Link2 size={15} /> ربط الحساب</button>
               {gh.installUrl && <a className="btn-outline" href={gh.installUrl}><ExternalLink size={14} /> تثبيت على المستودعات</a>}
             </>
           )}
           {gh?.connected && (
             <>
               {gh.installUrl && <a className="btn-outline px-2.5 py-1.5" href={gh.installUrl}><ExternalLink size={14} /> اختيار المستودعات</a>}
-              <button className="btn-outline px-2.5 py-1.5" disabled={busy === "gh-conn"} onClick={githubConnect}><RefreshCw size={14} /> إعادة الربط</button>
+              <button className="btn-outline px-2.5 py-1.5" disabled={pending === "gh-conn"} onClick={githubConnect}><RefreshCw size={14} /> إعادة الربط</button>
               <button className="btn-ghost px-2.5 py-1.5 text-red-300" onClick={() => confirm("قطع اتصال GitHub؟") && run("gh-dis", () => api("/api/admin/github/disconnect", { body: {} }), "تم قطع الاتصال").then(() => reload())}><Unlink size={14} /> قطع الاتصال</button>
             </>
           )}
@@ -171,7 +153,7 @@ export default function McpPage() {
               {on && s ? (
                 <button className="btn-ghost px-2 py-1 text-xs text-slate-400" onClick={() => run(`dis-${s.id}`, () => api(`/api/admin/mcp/${s.id}/disconnect`, { body: {} }), "تم قطع الاتصال").then(() => reload())}>قطع</button>
               ) : (
-                <button className="btn-primary px-3 py-1.5" disabled={busy === `p-${p.key}`} onClick={() => connect(s ? { serverId: s.id } : { preset: p.key }, `p-${p.key}`)}>{busy === `p-${p.key}` ? "…" : "ربط"}</button>
+                <button className="btn-primary px-3 py-1.5" disabled={pending === `p-${p.key}`} onClick={() => connect(s ? { serverId: s.id } : { preset: p.key }, `p-${p.key}`)}>{pending === `p-${p.key}` ? "…" : "ربط"}</button>
               )}
             </div>
           );
@@ -181,12 +163,8 @@ export default function McpPage() {
       {/* ---------------- Custom */}
       <div className="card mb-6 p-4">
         <div className="mb-2 font-medium">موصّل مخصص</div>
-        <p className="mb-3 text-xs text-slate-500">الصق رابط أي خادم MCP واضغط «ربط». إذا يحتاج تسجيل دخول يفتح لك صفحة الخدمة (OAuth)، وإذا ما يحتاج يتربط على طول.</p>
-        <div className="grid gap-2 sm:grid-cols-[1fr_2fr_auto]">
-          <input className="input" placeholder="الاسم" value={custom.name} onChange={(e) => setCustom({ ...custom, name: e.target.value })} />
-          <input dir="ltr" className="input" placeholder="https://example.com/mcp" value={custom.url} onChange={(e) => setCustom({ ...custom, url: e.target.value })} />
-          <button className="btn-primary" disabled={!custom.url.trim() || busy === "add"} onClick={addCustom}><Plus size={15} /> ربط</button>
-        </div>
+        <p className="mb-3 text-xs text-slate-500">الصق رابط أي خادم MCP أو إعداداته (JSON) واضغط «ربط» — يفتح لك صفحة الخدمة تسجّل دخول وترجع مربوط. بدون أي توكن.</p>
+        <AddConnector back="/admin/mcp" />
       </div>
 
       {/* ---------------- All servers */}
@@ -215,7 +193,7 @@ export default function McpPage() {
               </td>
               <td className="px-3 py-3">
                 <div className="flex flex-wrap justify-end gap-1.5">
-                  {s.authType !== "github" && <button className="btn-outline px-2.5 py-1.5" disabled={busy === `conn-${s.id}`} onClick={() => connect({ serverId: s.id }, `conn-${s.id}`)}><Link2 size={14} /> {on ? "إعادة ربط" : "ربط"}</button>}
+                  {s.authType !== "github" && <button className="btn-outline px-2.5 py-1.5" disabled={pending === `conn-${s.id}`} onClick={() => connect({ serverId: s.id }, `conn-${s.id}`)}><Link2 size={14} /> {on ? "إعادة ربط" : "ربط"}</button>}
                   <button className="btn-outline px-2.5 py-1.5" disabled={busy === `sync-${s.id}`} onClick={() => run(`sync-${s.id}`, () => api<{ ok: boolean; error?: string; server: Server }>(`/api/admin/mcp/${s.id}/sync`, { method: "POST" }), (r) => (r.ok ? `شغال: ${r.server.toolCount} أداة` : `فشل: ${r.error}`)).then(() => reload())}><RefreshCw size={14} /> اختبار</button>
                   {on && (s.authType === "oauth" || s.authType === "token") && <button className="btn-outline px-2.5 py-1.5" onClick={() => run(`dis-${s.id}`, () => api(`/api/admin/mcp/${s.id}/disconnect`, { body: {} }), "تم قطع الاتصال").then(() => reload())}><Unlink size={14} /> قطع</button>}
                   <button className="btn-outline px-2.5 py-1.5" onClick={() => run(`en-${s.id}`, () => api(`/api/admin/mcp/${s.id}`, { method: "PATCH", body: { enabled: !s.enabled } }), s.enabled ? "تم التعطيل" : "تم التفعيل").then(() => reload())}>{s.enabled ? "تعطيل" : "تفعيل"}</button>
@@ -228,6 +206,29 @@ export default function McpPage() {
         })}
       </Table>
 
+      <section className="card mt-6">
+        <h2 className="mb-1 font-semibold">سجل الربط</h2>
+        <p className="mb-3 text-xs text-slate-400">كل ضغطة «ربط» ورجوع من المزوّد تنسجل هنا — لو فشل شي تشوف السبب.</p>
+        {!data?.events?.length ? (
+          <p className="text-sm text-slate-500">ما فيه محاولات بعد.</p>
+        ) : (
+          <ul className="divide-y divide-ink-700 text-sm" data-testid="connect-log">
+            {data.events.map((e) => (
+              <li key={e.id} className="flex items-start gap-2 py-2">
+                <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${e.ok ? "bg-emerald-400" : "bg-rose-400"}`} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-x-2">
+                    <span className="font-medium">{e.kind === "github" ? "GitHub" : e.target ?? "MCP"}</span>
+                    <span className="badge bg-ink-700 text-slate-300">{({ start: "بدء", callback: "رجوع من المزوّد", done: "تم", error: "خطأ", app_created: "إنشاء التطبيق" } as Record<string, string>)[e.step] ?? e.step}</span>
+                    <span className="text-xs text-slate-500">{fmtDate(e.createdAt)}</span>
+                  </div>
+                  {e.message && <div dir="auto" className={`break-words text-xs ${e.ok ? "text-slate-400" : "text-rose-300"}`}>{e.message}</div>}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
       <Modal open={!!form} onClose={() => setForm(null)} title={`إعدادات متقدمة — ${editing?.name ?? ""}`} wide>
         {form && (
           <div className="grid gap-4 sm:grid-cols-2">
@@ -244,14 +245,6 @@ export default function McpPage() {
             </Field>
             <Field label="فلتر الأدوات" hint="أسماء مفصولة بفاصلة، ويدعم * — فارغ = الكل"><input dir="ltr" className="input font-mono text-xs" value={form.toolFilter} onChange={(e) => setForm({ ...form, toolFilter: e.target.value })} /></Field>
             <Field label="ترويسات إضافية (JSON)"><input dir="ltr" className="input font-mono text-xs" value={form.extraHeaders} onChange={(e) => setForm({ ...form, extraHeaders: e.target.value })} /></Field>
-            <details className="sm:col-span-2">
-              <summary className="cursor-pointer text-sm text-slate-400"><ChevronDown size={13} className="inline" /> توكن يدوي (بديل احتياطي)</summary>
-              <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                <Field label="التوكن" hint="يُشفَّر ولا يُعرض مرة ثانية."><input dir="ltr" className="input font-mono" type="password" autoComplete="off" value={form.token} onChange={(e) => setForm({ ...form, token: e.target.value })} /></Field>
-                <Field label="ترويسة المصادقة"><input dir="ltr" className="input" value={form.authHeader} onChange={(e) => setForm({ ...form, authHeader: e.target.value })} /></Field>
-                <Field label="نوع المصادقة"><input dir="ltr" className="input" value={form.authScheme} onChange={(e) => setForm({ ...form, authScheme: e.target.value })} /></Field>
-              </div>
-            </details>
             <div className="sm:col-span-2"><Toggle checked={form.enabled} onChange={(v) => setForm({ ...form, enabled: v })} label="مفعّل" /></div>
             <div className="flex justify-end gap-2 sm:col-span-2">
               <button className="btn-ghost" onClick={() => setForm(null)}>إلغاء</button>

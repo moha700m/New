@@ -38,13 +38,35 @@ function systemPrompt(tools: AgentTool[], mcpErrors: string[]) {
   return [
     `You are JB AI Agent — an autonomous assistant that completes tasks end-to-end using tools (like Claude Code). Today is ${now}.`,
     `Work in steps: think briefly, call tools, read their results, fix errors and retry with different inputs, and continue until the task is fully done. You may use up to ${MAX_AGENT_STEPS} tool calls.`,
-    "Never invent tool results. Prefer reading before writing (e.g. read a repo file before editing it). For GitHub work use the GitHub MCP tools when available: inspect the repo, create a branch, commit files, open a pull request, and report links.",
-    "When finished, reply with a clear final answer in the user's language (Saudi/Gulf Arabic if the user writes Arabic) summarizing what you did, with links/sources.",
+    "Never invent tool results. Prefer reading before writing (e.g. read a repo file before editing it).",
+    "You are also a senior full-stack web engineer and product designer. When asked to build a site/app:",
+    "1) PLAN briefly (pages, sections, content, colors) — fill missing details with smart defaults instead of asking; use the user's real details (names, prices, phone numbers) exactly.",
+    "2) BUILD complete, production-quality files — never placeholders like 'lorem ipsum' or 'add content here'. Defaults: semantic HTML5, mobile-first responsive CSS (flex/grid, clamp() type scale), Arabic content → <html lang=\"ar\" dir=\"rtl\"> with IBM Plex Sans Arabic from Google Fonts, accessible contrast, 44px tap targets, smooth subtle animations, meta viewport + description + Open Graph tags, favicon (inline SVG emoji is fine), fast (no heavy frameworks for static sites; Tailwind CDN allowed). WhatsApp links: https://wa.me/<digits>. Images: generated ones (attachment_id), https://images.unsplash.com/… photos, or CSS/SVG art.",
+    "   Use write_files to put the project into the workspace (split big projects across calls: index.html, styles.css, app.js…).",
+    "3) SHIP — pick the best available route and do it yourself:",
+    "   • Instant public link (always available): publish_site (no args = whole workspace).",
+    "   • GitHub (if github__* tools exist): github__create_repo (public) → github__push_files (no files = whole workspace) → github__enable_pages → live at https://<owner>.github.io/<repo>/. Vercel/Netlify/Cloudflare one-tap: github__deploy_links and give those links (the user taps once, signs in, and the repo deploys; future pushes redeploy automatically).",
+    "   • Cloudflare / Netlify / Supabase / Neon / Railway connector tools (names start with the connector) — use them directly when the user asks for that platform (e.g. Cloudflare tools can create Workers/Pages; Netlify tools can create sites and deploy).",
+    "4) VERIFY with check_url on every live URL (GitHub Pages can take ~1 minute: retry), fix and redeploy if broken.",
+    "5) REPORT in short Saudi Arabic: what was built, the live link(s) first, and what the user can ask next.",
+    "Be efficient: about 4 minutes in total per task — few, large tool calls; at most 2 generated images (1024x1024) and only when really useful.",
     `Available tools: ${tools.map((t) => t.name).join(", ") || "(none)"}.`,
     mcpErrors.length ? `Note: some MCP servers failed to connect: ${mcpErrors.join("; ")}` : "",
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+/** Final answer when the model ran out of time: list what was done and any links produced. */
+function timeoutAnswer(steps: AgentStep[]) {
+  const done = steps.filter((s) => s.kind === "tool" && s.status === "ok");
+  const links = [...new Set(done.flatMap((s) => (`${s.summary ?? ""} ${s.result ?? ""}`.match(/https?:\/\/[^\s"'<>)\]]+/g) ?? [])))].slice(0, 8);
+  return [
+    "⏱️ الوقت المسموح للمهمة خلص قبل ما يكمّل النموذج الرد الأخير.",
+    done.length ? `تم تنفيذ ${done.length} خطوة: ${done.map((s) => s.label ?? s.name).join("، ")}.` : "",
+    links.length ? `الروابط:\n${links.map((l) => `- ${l}`).join("\n")}` : "",
+    "قل «كمل» وأكمل من حيث وقفت.",
+  ].filter(Boolean).join("\n\n");
 }
 
 function reactProtocol(tools: AgentTool[]) {
@@ -109,6 +131,11 @@ export async function runAgent(opts: {
   onProgress?: () => void;
 }): Promise<{ text: string; reasoning: string; usage: Usage; steps: AgentStep[] }> {
   const { model, emit, signal } = opts;
+  // Serverless functions stop at 300 s: keep a budget, cap each model call / tool, and force a final answer in time.
+  const startedAt = Date.now();
+  const DEADLINE_MS = 250_000;
+  const remaining = () => DEADLINE_MS - (Date.now() - startedAt);
+  const callSignal = (capMs: number) => AbortSignal.any([signal, AbortSignal.timeout(Math.max(15_000, Math.min(capMs, remaining())))]);
   const adapter = getAdapter(model.provider);
   const steps: AgentStep[] = [];
   let usage: Usage = {};
@@ -131,7 +158,7 @@ export async function runAgent(opts: {
   const mcp = await loadMcpTools(signal);
   const tools = [...BUILTIN_TOOLS, ...mcp.tools].slice(0, 120);
   const byName = new Map(tools.map((t) => [t.name, t]));
-  const toolCtx = { userId: opts.userId, assistantMessageId: opts.assistantMessageId, emit, signal };
+  const toolCtx = { userId: opts.userId, assistantMessageId: opts.assistantMessageId, emit, signal, workspace: new Map<string, string>() };
   if (mcp.errors.length) pushStep({ kind: "info", text: `تعذّر الاتصال ببعض خوادم MCP: ${mcp.errors.join(" · ")}` });
 
   async function execTool(name: string, args: Record<string, unknown>): Promise<string> {
@@ -144,7 +171,20 @@ export async function runAgent(opts: {
       return `ERROR: unknown tool "${name}". Available: ${tools.map((t) => t.name).join(", ")}`;
     }
     try {
-      const out = await tool.run(args, toolCtx);
+      // models sometimes send arrays/objects as JSON strings: coerce by the declared parameter type
+      const props = ((tool.parameters as { properties?: Record<string, { type?: string }> }).properties ?? {});
+      for (const [k, v] of Object.entries(args)) {
+        if (typeof v === "string" && (props[k]?.type === "array" || props[k]?.type === "object")) {
+          try {
+            args[k] = JSON.parse(v);
+          } catch {}
+        }
+      }
+      const tsig = callSignal(120_000);
+      const out = await Promise.race([
+        tool.run(args, { ...toolCtx, signal: tsig }),
+        new Promise<never>((_, rej) => tsig.addEventListener("abort", () => rej(new Error(signal.aborted ? "stopped" : "tool timed out")), { once: true })),
+      ]);
       updateStep(step, { status: "ok", summary: out.summary, result: clip(out.text, 4000), ms: Date.now() - t0 });
       void persist();
       return clip(out.text);
@@ -158,7 +198,7 @@ export async function runAgent(opts: {
   }
 
   const sys = systemPrompt(tools, mcp.errors);
-  const maxTokens = model.maxOutputTokens ? Math.min(model.maxOutputTokens, 8192) : 4096;
+  const maxTokens = model.maxOutputTokens ? Math.min(model.maxOutputTokens, 16384) : 8192;
   const ctxMsgs = model.supportsVision ? opts.contextMessages : opts.contextMessages.map((m) => ({ ...m, images: undefined }));
   let finalText = "";
   let toolCalls = 0;
@@ -173,15 +213,20 @@ export async function runAgent(opts: {
       const spec = tools.map((t) => ({ type: "function" as const, function: { name: t.name, description: t.description.slice(0, 1000), parameters: t.parameters } }));
       for (let round = 0; ; round++) {
         if (signal.aborted) break;
-        const limitHit = toolCalls >= MAX_AGENT_STEPS;
-        if (limitHit) messages.push({ role: "user", content: `You reached the limit of ${MAX_AGENT_STEPS} tool calls. Stop calling tools and give the final answer now with what you have.` });
+        const limitHit = toolCalls >= MAX_AGENT_STEPS || remaining() < 45_000;
+        if (limitHit) messages.push({ role: "user", content: `Time/tool budget reached. Stop calling tools and give the final answer now with what you have (include any links already produced).` });
         let r;
         try {
-          r = await oa.completeWithTools({ model: model.modelId, messages, tools: limitHit ? undefined : spec, maxTokens, signal });
+          r = await oa.completeWithTools({ model: model.modelId, messages, tools: limitHit ? undefined : spec, maxTokens, signal: callSignal(limitHit ? 40_000 : 180_000) });
         } catch (e) {
           if (round === 0 && e instanceof ProviderError && (e.status === 400 || e.status === 422) && !signal.aborted) {
             pushStep({ kind: "info", text: "النموذج رفض استدعاء الأدوات الأصلي، تحويل لبروتوكول ReAct النصي." });
             native = false;
+            break;
+          }
+          if (!signal.aborted && round > 0) {
+            finalText = timeoutAnswer(steps);
+            native = true;
             break;
           }
           throw e;
@@ -221,15 +266,21 @@ export async function runAgent(opts: {
       if (extraSystem) msgs[0] = { role: "system", content: `${extraSystem}\n\n${msgs[0]!.content}` };
       for (;;) {
         if (signal.aborted) break;
-        const limitHit = toolCalls >= MAX_AGENT_STEPS;
-        if (limitHit) msgs.push({ role: "user", content: `Tool-call limit (${MAX_AGENT_STEPS}) reached. Give the final answer now without any tool JSON.` });
+        const limitHit = toolCalls >= MAX_AGENT_STEPS || remaining() < 45_000;
+        if (limitHit) msgs.push({ role: "user", content: `Time/tool budget reached. Give the final answer now without any tool JSON.` });
         let text = "";
-        for await (const ch of adapter.chat({ model: model.modelId, messages: msgs, maxTokens, signal })) {
-          if (ch.type === "text") text += ch.text;
-          else if (ch.type === "reasoning") {
-            reasoning += ch.text;
-            emit({ type: "reasoning", text: ch.text });
-          } else if (ch.type === "usage") usage = addUsage(usage, ch);
+        try {
+          for await (const ch of adapter.chat({ model: model.modelId, messages: msgs, maxTokens, signal: callSignal(limitHit ? 40_000 : 180_000) })) {
+            if (ch.type === "text") text += ch.text;
+            else if (ch.type === "reasoning") {
+              reasoning += ch.text;
+              emit({ type: "reasoning", text: ch.text });
+            } else if (ch.type === "usage") usage = addUsage(usage, ch);
+          }
+        } catch (e) {
+          if (signal.aborted || !toolCalls) throw e;
+          finalText = timeoutAnswer(steps);
+          break;
         }
         const action = limitHit ? null : parseAction(text);
         if (!action) {

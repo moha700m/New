@@ -51,8 +51,8 @@ export async function consumeState(state: string | null, kind: string) {
 }
 
 /** Builds the manifest + the github.com URL the browser must POST it to. */
-export async function buildManifest(origin: string, org?: string | null) {
-  const state = await newState("github_manifest", { origin });
+export async function buildManifest(origin: string, org?: string | null, back = "/") {
+  const state = await newState("github_manifest", { origin, back });
   const suffix = crypto.randomBytes(2).toString("hex");
   const manifest = {
     name: `JB AI Agent ${suffix}`,
@@ -65,6 +65,8 @@ export async function buildManifest(origin: string, org?: string | null) {
     public: false,
     default_permissions: {
       contents: "write",
+      administration: "write",
+      pages: "write",
       pull_requests: "write",
       issues: "write",
       metadata: "read",
@@ -92,6 +94,7 @@ export async function convertManifest(code: string) {
       appSlug: j.slug,
       appName: j.name,
       appHtmlUrl: j.html_url,
+      appOwner: j.owner?.login ?? null,
       clientId: j.client_id,
       clientSecretEncrypted: encryptSecret(j.client_secret),
       privateKeyEncrypted: j.pem ? encryptSecret(j.pem) : null,
@@ -102,6 +105,7 @@ export async function convertManifest(code: string) {
       appSlug: j.slug,
       appName: j.name,
       appHtmlUrl: j.html_url,
+      appOwner: j.owner?.login ?? null,
       clientId: j.client_id,
       clientSecretEncrypted: encryptSecret(j.client_secret),
       privateKeyEncrypted: j.pem ? encryptSecret(j.pem) : null,
@@ -115,10 +119,10 @@ export async function convertManifest(code: string) {
   });
 }
 
-export async function authorizeUrl(origin: string) {
+export async function authorizeUrl(origin: string, back = "/") {
   const c = await getGithubConnection();
   if (!c?.clientId) throw new Error("لازم تسوي تطبيق GitHub أول");
-  const state = await newState("github_user", { origin });
+  const state = await newState("github_user", { origin, back });
   const u = new URL("https://github.com/login/oauth/authorize");
   u.searchParams.set("client_id", c.clientId);
   u.searchParams.set("redirect_uri", `${origin}${USER_CALLBACK}`);
@@ -150,9 +154,14 @@ function tokenFields(t: { access_token: string; refresh_token?: string; expires_
 }
 
 /** OAuth callback (after install with request_oauth_on_install, or after "Connect"). */
-export async function finishUserOAuth(code: string, redirectUri: string) {
+export async function finishUserOAuth(code: string, redirectUri: string, opts: { requireAppOwner?: boolean } = {}) {
   const t = await tokenExchange({ code, redirect_uri: redirectUri });
   const me = await fetch("https://api.github.com/user", { headers: { ...GH_HEADERS, Authorization: `Bearer ${t.access_token}` } }).then((r) => r.json()).catch(() => ({}));
+  if (opts.requireAppOwner) {
+    // install callbacks carry no state: only accept the account that owns the (private) app
+    const conn = await getGithubConnection();
+    if (!me?.login || (conn?.appOwner && conn.appOwner.toLowerCase() !== String(me.login).toLowerCase())) throw new Error("هذا الحساب مو صاحب تطبيق GitHub — سجّل دخول بحسابك وجرب مرة ثانية");
+  }
   const c = await prisma.githubConnection.update({
     where: { id: "global" },
     data: { ...tokenFields(t), login: me?.login ?? null, avatarUrl: me?.avatar_url ?? null, connectedAt: new Date() },

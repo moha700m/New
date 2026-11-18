@@ -1,46 +1,37 @@
-import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
-import { finishMcpOAuth, publicOrigin } from "@/lib/agent/oauth";
-import { connectServer } from "@/lib/agent/tools";
+import { finishMcpOAuth, peekMcpState, publicOrigin } from "@/lib/agent/oauth";
+import { syncTools } from "@/lib/agent/connect-flow";
+import { connectLog, resultRedirect } from "@/lib/agent/connect";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-/** Redirect target of MCP authorization servers. */
+/**
+ * Redirect target of MCP authorization servers. Authenticated by the single-use state stored in the DB
+ * (created by the signed-in owner), so it works even if the provider's page opened in another browser/app.
+ */
 export async function GET(req: Request) {
   const origin = publicOrigin(req);
-  const back = (q: string) => NextResponse.redirect(`${origin}/admin/mcp?${q}`);
-  let admin;
-  try {
-    admin = await requireAdmin();
-  } catch {
-    return NextResponse.redirect(`${origin}/login?next=/admin/mcp`);
-  }
   const u = new URL(req.url);
   const err = u.searchParams.get("error");
   const code = u.searchParams.get("code");
   const state = u.searchParams.get("state");
-  if (err || !code || !state) return back(`error=${encodeURIComponent(u.searchParams.get("error_description") || err || "missing code")}`);
+  const peek = await peekMcpState(state);
+  await connectLog(req, { kind: "mcp", step: "callback", target: peek?.name ?? null, ok: Boolean(code && !err), message: err ? `${err}: ${u.searchParams.get("error_description") ?? ""}` : code ? "code received" : "no code" });
+  if (err || !code || !state) {
+    const msg = err === "access_denied" ? "ألغيت الربط من صفحة المزوّد" : u.searchParams.get("error_description") || err || "المزوّد ما رجّع رمز الربط";
+    return resultRedirect(origin, { ok: false, name: peek?.name, message: msg, back: peek?.back });
+  }
   try {
-    const s = await finishMcpOAuth(state, code);
-    let toolCount = 0;
-    try {
-      const c = await connectServer(s, undefined, 30_000);
-      try {
-        const tools = await c.listTools();
-        toolCount = tools.length;
-        await prisma.mcpServer.update({ where: { id: s.id }, data: { tools: tools as any, lastSyncAt: new Date(), lastError: null, enabled: true } });
-      } finally {
-        await c.close();
-      }
-    } catch (e) {
-      await prisma.mcpServer.update({ where: { id: s.id }, data: { lastError: (e as Error).message.slice(0, 500) } });
-    }
-    await audit({ id: admin.id, email: admin.email }, "mcp.oauth_connected", { entityType: "mcp", entityId: s.id, details: { name: s.name, tools: toolCount } });
-    return back(`connected=${encodeURIComponent(s.slug)}&tools=${toolCount}`);
+    const { server, back } = await finishMcpOAuth(state, code);
+    const tools = await syncTools(server);
+    await connectLog(req, { kind: "mcp", step: "done", target: server.slug, message: `${tools} tools` });
+    const owner = await prisma.user.findFirst({ where: { role: "OWNER" }, select: { id: true, email: true } });
+    if (owner) await audit(owner, "mcp.oauth_connected", { entityType: "mcp", entityId: server.id, details: { name: server.name, tools } });
+    return resultRedirect(origin, { ok: true, name: server.name, back, tools });
   } catch (e) {
-    return back(`error=${encodeURIComponent((e as Error).message.slice(0, 300))}`);
+    await connectLog(req, { kind: "mcp", step: "error", target: peek?.name ?? null, ok: false, message: (e as Error).message });
+    return resultRedirect(origin, { ok: false, name: peek?.name, message: (e as Error).message, back: peek?.back });
   }
 }

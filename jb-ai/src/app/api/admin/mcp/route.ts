@@ -2,14 +2,15 @@ import { adminRoute } from "@/lib/admin";
 import { encryptSecret, last4 } from "@/lib/crypto";
 import { prisma } from "@/lib/db";
 import { HttpError, json, parseBody } from "@/lib/http";
-import { CONNECTOR_PRESETS, mcpSchema, redactMcp } from "@/lib/agent/mcp-admin";
+import { CONNECTOR_CATEGORIES, CONNECTOR_PRESETS, mcpSchema, redactMcp } from "@/lib/agent/mcp-admin";
 import { getGithubConnection, githubPublicState } from "@/lib/agent/github";
 
 export const dynamic = "force-dynamic";
 
 export const GET = adminRoute(async () => {
   const servers = await prisma.mcpServer.findMany({ orderBy: { createdAt: "asc" } });
-  return json({ servers: servers.map(redactMcp), presets: CONNECTOR_PRESETS, github: githubPublicState(await getGithubConnection()) });
+  const events = await prisma.connectEvent.findMany({ orderBy: { createdAt: "desc" }, take: 30, select: { id: true, kind: true, step: true, target: true, ok: true, message: true, createdAt: true } });
+  return json({ servers: servers.map(redactMcp), presets: CONNECTOR_PRESETS, categories: CONNECTOR_CATEGORIES, github: githubPublicState(await getGithubConnection()), events });
 });
 
 export const POST = adminRoute(async ({ req, log }) => {

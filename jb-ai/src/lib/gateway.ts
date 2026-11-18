@@ -280,9 +280,11 @@ export async function executeChat(
   const providerCost = usage.costUsd;
   const estimated = providerCost == null ? estimateCost(final.model, usage.promptTokens, usage.completionTokens) : null;
 
-  await prisma.message.update({
+  // updateMany: the message may have been deleted meanwhile (chat deleted / edited / regenerated while streaming)
+  await prisma.message.updateMany({
     where: { id: assistant.id },
     data: {
+      costUsd: providerCost ?? estimated ?? null,
       content: text,
       reasoning: reasoning || null,
       status,
@@ -293,7 +295,7 @@ export async function executeChat(
       usedFallback: Boolean(used?.isFallback),
     },
   });
-  await prisma.conversation.update({ where: { id: conversation.id }, data: { updatedAt: new Date(), modelId: used && !used.isFallback ? used.model.id : undefined } });
+  await prisma.conversation.updateMany({ where: { id: conversation.id }, data: { updatedAt: new Date(), modelId: used && !used.isFallback ? used.model.id : undefined } });
   if (used || stopped) {
     await prisma.usageRecord.create({
       data: {
@@ -317,7 +319,7 @@ export async function executeChat(
   if (errMsg) {
     emit({ type: "error", error: friendlyError(errMsg), messageId: assistant.id });
   } else {
-    emit({ type: "done", status, messageId: assistant.id, usage: { promptTokens: usage.promptTokens ?? null, completionTokens: usage.completionTokens ?? null }, model: { id: final.model.id, name: final.model.displayName }, fallback: Boolean(used?.isFallback) });
+    emit({ type: "done", status, messageId: assistant.id, usage: { promptTokens: usage.promptTokens ?? null, completionTokens: usage.completionTokens ?? null }, costUsd: providerCost ?? estimated ?? null, model: { id: final.model.id, name: final.model.displayName }, fallback: Boolean(used?.isFallback) });
   }
 }
 

@@ -1,56 +1,38 @@
-import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth";
-import { audit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
+import { audit } from "@/lib/audit";
 import { consumeState, finishUserOAuth, USER_CALLBACK } from "@/lib/agent/github";
 import { publicOrigin } from "@/lib/agent/oauth";
-import { connectServer } from "@/lib/agent/tools";
+import { connectLog, resultRedirect } from "@/lib/agent/connect";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * User-to-server OAuth callback. Reached either from "Connect" (has our state) or right after installing
- * the app (request_oauth_on_install → GitHub adds code + installation_id + setup_action=install).
+ * User-to-server OAuth callback. Reached either from «ربط» (carries our DB state) or right after installing
+ * the app (request_oauth_on_install → code + installation_id, no state: then only the app owner's account is accepted).
  */
 export async function GET(req: Request) {
   const origin = publicOrigin(req);
-  const back = (q: string) => NextResponse.redirect(`${origin}/admin/mcp?${q}`);
-  let admin;
-  try {
-    admin = await requireAdmin();
-  } catch {
-    return NextResponse.redirect(`${origin}/login?next=/admin/mcp`);
-  }
   const u = new URL(req.url);
   const code = u.searchParams.get("code");
   const state = u.searchParams.get("state");
-  const fromInstall = Boolean(u.searchParams.get("installation_id")) || u.searchParams.get("setup_action") === "install" || u.searchParams.get("setup_action") === "update";
-  if (u.searchParams.get("error")) return back(`error=${encodeURIComponent(u.searchParams.get("error_description") || u.searchParams.get("error")!)}`);
-  if (!code) return fromInstall ? back("github=installed") : back("error=missing%20code");
-  if (state ? !(await consumeState(state, "github_user")) : !fromInstall) return back(`error=${encodeURIComponent("جلسة الربط انتهت — جرّب مرة ثانية")}`);
+  const fromInstall = Boolean(u.searchParams.get("installation_id")) || ["install", "update"].includes(u.searchParams.get("setup_action") ?? "");
+  const err = u.searchParams.get("error");
+  const st = state ? await consumeState(state, "github_user") : null;
+  const back = ((st?.data as { back?: string } | null)?.back) ?? "/";
+  await connectLog(req, { kind: "github", step: "callback", target: fromInstall ? "install" : "oauth", ok: Boolean(code) && !err, message: err ? `${err}: ${u.searchParams.get("error_description") ?? ""}` : code ? "code received" : "no code" });
+  if (err) return resultRedirect(origin, { ok: false, name: "GitHub", message: err === "access_denied" ? "ألغيت الربط من صفحة GitHub" : u.searchParams.get("error_description") || err, back });
+  if (!code) return resultRedirect(origin, { ok: false, name: "GitHub", message: fromInstall ? "تم تثبيت التطبيق — اضغط «ربط GitHub» مرة ثانية لإكمال الربط" : "GitHub ما رجّع رمز الربط", back });
+  if (state && !st) return resultRedirect(origin, { ok: false, name: "GitHub", message: "جلسة الربط انتهت — اضغط «ربط GitHub» مرة ثانية", back });
+  if (!state && !fromInstall) return resultRedirect(origin, { ok: false, name: "GitHub", message: "طلب ربط غير معروف — ابدأ من زر «ربط GitHub»", back });
   try {
-    const c = await finishUserOAuth(code, `${origin}${USER_CALLBACK}`);
-    // load the GitHub MCP tool list (if the MCP server rejects the token, the agent falls back to REST tools)
-    const s = await prisma.mcpServer.findUnique({ where: { slug: "github" } });
-    let tools = 0;
-    if (s) {
-      try {
-        const cl = await connectServer(s, undefined, 30_000);
-        try {
-          const list = await cl.listTools();
-          tools = list.length;
-          await prisma.mcpServer.update({ where: { id: s.id }, data: { tools: list as any, lastSyncAt: new Date(), lastError: null } });
-        } finally {
-          await cl.close();
-        }
-      } catch (e) {
-        await prisma.mcpServer.update({ where: { id: s.id }, data: { lastError: `MCP: ${(e as Error).message.slice(0, 300)} — أدوات REST البديلة شغالة` } });
-      }
-    }
-    await audit({ id: admin.id, email: admin.email }, "github.connected", { entityType: "github", details: { login: c.login, tools } });
-    return back(`connected=github&tools=${tools}`);
+    const c = await finishUserOAuth(code, `${origin}${USER_CALLBACK}`, { requireAppOwner: !st });
+    await connectLog(req, { kind: "github", step: "done", target: c.login });
+    const owner = await prisma.user.findFirst({ where: { role: "OWNER" }, select: { id: true, email: true } });
+    if (owner) await audit(owner, "github.connected", { entityType: "github", details: { login: c.login } });
+    return resultRedirect(origin, { ok: true, name: `GitHub (${c.login ?? ""})`, back });
   } catch (e) {
-    return back(`error=${encodeURIComponent((e as Error).message.slice(0, 300))}`);
+    await connectLog(req, { kind: "github", step: "error", ok: false, message: (e as Error).message });
+    return resultRedirect(origin, { ok: false, name: "GitHub", message: (e as Error).message, back });
   }
 }

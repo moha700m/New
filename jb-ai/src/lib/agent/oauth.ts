@@ -134,7 +134,7 @@ function pkce() {
 }
 
 /** Starts the authorization-code + PKCE flow. Returns the URL to send the browser to. */
-export async function startMcpOAuth(server: McpServer, origin: string, probe: Extract<ProbeResult, { needsAuth: true }>): Promise<string> {
+export async function startMcpOAuth(server: McpServer, origin: string, probe: Extract<ProbeResult, { needsAuth: true }>, back = "/"): Promise<string> {
   const redirectUri = `${origin}${MCP_OAUTH_CALLBACK}`;
   const prev = (server.oauthConfig ?? null) as OAuthConfig | null;
   let cfg = await discoverOAuth(server.url, probe);
@@ -154,7 +154,7 @@ export async function startMcpOAuth(server: McpServer, origin: string, probe: Ex
   const { verifier, challenge } = pkce();
   const state = randomToken(24);
   await prisma.oAuthState.deleteMany({ where: { createdAt: { lt: new Date(Date.now() - 60 * 60_000) } } });
-  await prisma.oAuthState.create({ data: { id: state, kind: "mcp", serverId: server.id, data: { verifier: encryptSecret(verifier), redirectUri } } });
+  await prisma.oAuthState.create({ data: { id: state, kind: "mcp", serverId: server.id, data: { verifier: encryptSecret(verifier), redirectUri, back } } });
   const a = new URL(cfg.authorization_endpoint);
   a.searchParams.set("response_type", "code");
   a.searchParams.set("client_id", cfg.client_id!);
@@ -199,6 +199,15 @@ function tokenData(t: { access_token: string; refresh_token?: string; expires_in
 }
 
 /** Handles the redirect back from the authorization server. */
+/** Peeks at a pending state (without consuming it) — used to name the connector in error pages. */
+export async function peekMcpState(state: string | null) {
+  if (!state) return null;
+  const st = await prisma.oAuthState.findUnique({ where: { id: state } });
+  if (!st?.serverId) return null;
+  const s = await prisma.mcpServer.findUnique({ where: { id: st.serverId }, select: { name: true, slug: true } });
+  return { name: s?.name ?? null, back: (st.data as { back?: string } | null)?.back ?? "/" };
+}
+
 export async function finishMcpOAuth(state: string, code: string) {
   const st = await prisma.oAuthState.findUnique({ where: { id: state } });
   if (!st || st.kind !== "mcp" || !st.serverId) throw new Error("جلسة الربط انتهت أو غير صالحة — جرّب «ربط» مرة ثانية");
@@ -206,9 +215,10 @@ export async function finishMcpOAuth(state: string, code: string) {
   if (Date.now() - st.createdAt.getTime() > 30 * 60_000) throw new Error("جلسة الربط انتهت — جرّب مرة ثانية");
   const server = await prisma.mcpServer.findUniqueOrThrow({ where: { id: st.serverId } });
   const cfg = server.oauthConfig as unknown as OAuthConfig;
-  const d = st.data as { verifier: string; redirectUri: string };
+  const d = st.data as { verifier: string; redirectUri: string; back?: string };
   const t = await tokenRequest(cfg, server.oauthClientSecretEncrypted, { grant_type: "authorization_code", code, redirect_uri: d.redirectUri, code_verifier: decryptSecret(d.verifier) });
-  return prisma.mcpServer.update({ where: { id: server.id }, data: { ...tokenData(t), authType: "oauth", connectedAt: new Date(), lastError: null } });
+  const updated = await prisma.mcpServer.update({ where: { id: server.id }, data: { ...tokenData(t), authType: "oauth", connectedAt: new Date(), lastError: null } });
+  return { server: updated, back: d.back ?? "/" };
 }
 
 /** Returns a valid access token for an OAuth-connected server, refreshing it when it is about to expire. */

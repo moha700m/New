@@ -15,6 +15,8 @@ export interface ToolContext {
   assistantMessageId: string;
   emit: (ev: Record<string, unknown>) => void;
   signal: AbortSignal;
+  /** In-memory project workspace for this run (path → content); deploy tools use it when no files are passed. */
+  workspace?: Map<string, string>;
 }
 export interface ToolOutput {
   text: string;
@@ -224,11 +226,145 @@ const generateImage: AgentTool = {
       ids.push(att.id);
       ctx.emit({ type: "image", attachmentId: att.id, mimeType: img.mimeType });
     }
-    return { text: `Generated ${ids.length} image(s) with ${row.displayName}; already displayed to the user. Do not repeat the image data.`, summary: `${row.displayName} · ${ids.length} صورة` };
+    return { text: `Generated ${ids.length} image(s) with ${row.displayName}; already displayed to the user. attachment_ids: ${ids.join(", ")} (to use them in a published site, pass {path: "img/name.webp", attachment_id} in publish_site files).`, summary: `${row.displayName} · ${ids.length} صورة` };
   },
 };
 
-export const BUILTIN_TOOLS: AgentTool[] = [webSearch, webFetch, generateImage];
+// ------------------------------------------------------------------ instant hosting (no connector needed)
+export function siteBaseUrl() {
+  return (process.env.APP_URL || "https://jb-ai-seven.vercel.app").replace(/\/$/, "");
+}
+const SITE_MAX_BYTES = 12_000_000;
+/** Some models pass arrays/objects as a JSON string — accept both. */
+export function looseJson(v: unknown): unknown {
+  if (typeof v !== "string") return v;
+  const t = v.trim();
+  if (!t.startsWith("[") && !t.startsWith("{")) return v;
+  try {
+    return JSON.parse(t);
+  } catch {
+    return v;
+  }
+}
+
+async function normalizeFiles(rawIn: unknown, userId: string): Promise<Record<string, string>> {
+  const raw = looseJson(rawIn);
+  const out: Record<string, string> = {};
+  const list: { path: string; content: string; attachment_id?: string }[] = Array.isArray(raw)
+    ? (raw as any[]).map((f) => ({ path: String(f?.path ?? ""), content: String(f?.content ?? ""), attachment_id: f?.attachment_id ? String(f.attachment_id) : undefined }))
+    : raw && typeof raw === "object"
+      ? Object.entries(raw as Record<string, unknown>).map(([path, content]) => ({ path, content: String(content ?? "") }))
+      : [];
+  for (const f of list.slice(0, 80)) {
+    const path = f.path.trim().replace(/^\.?\/+/, "");
+    if (!path || path.includes("..") || !/^[\w\-./@ ]+$/.test(path)) throw new Error(`invalid file path: ${f.path}`);
+    if (f.attachment_id) {
+      // an image generated in this chat → embedded as a binary file of the site
+      const att = await prisma.attachment.findFirst({ where: { id: f.attachment_id, userId }, select: { data: true, mimeType: true } });
+      if (!att) throw new Error(`attachment not found: ${f.attachment_id}`);
+      out[path] = `base64:${att.mimeType}:${Buffer.from(att.data).toString("base64")}`;
+    } else out[path] = f.content;
+  }
+  if (!Object.keys(out).length) throw new Error("files is empty — pass [{path, content}]");
+  if (Object.values(out).reduce((n, c) => n + Buffer.byteLength(c), 0) > SITE_MAX_BYTES) throw new Error("site too large (max 12 MB including images)");
+  return out;
+}
+const publishSite: AgentTool = {
+  name: "publish_site",
+  label: "نشر موقع فوري",
+  description:
+    "Publish a static website (HTML/CSS/JS files) instantly and get a public URL — no GitHub or hosting account needed. Use for landing pages, prototypes, games, demos. Must include index.html. External CDNs (Tailwind CDN, Google Fonts, libraries) and external image URLs are allowed. Images generated with generate_image can be included as {path, attachment_id}. Pass the same slug again to update an existing site.",
+  parameters: {
+    type: "object",
+    properties: {
+      title: { type: "string", description: "Site title" },
+      slug: { type: "string", description: "Optional short url name (a-z, 0-9, -). Reuse to update." },
+      files: { type: "array", description: "Files to publish (omit to publish the project workspace)", items: { type: "object", properties: { path: { type: "string" }, content: { type: "string", description: "File text" }, attachment_id: { type: "string", description: "Instead of content: id of an image generated in this chat" } }, required: ["path"] } },
+    },
+    required: [],
+  },
+  async run(args, ctx) {
+    const files = await normalizeFiles(args.files ?? workspaceFiles(ctx), ctx.userId);
+    if (!files["index.html"]) throw new Error("index.html is required");
+    let slug = String(args.slug ?? "").toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
+    if (!slug) slug = `site-${Math.random().toString(36).slice(2, 8)}`;
+    const title = String(args.title ?? slug).slice(0, 120);
+    await prisma.site.upsert({ where: { slug }, create: { slug, title, files }, update: { title, files } });
+    const url = `${siteBaseUrl()}/s/${slug}/`;
+    return { text: JSON.stringify({ url, files: Object.keys(files) }), summary: url };
+  },
+};
+
+// ------------------------------------------------------------------ project workspace (write files across several steps)
+export function workspaceFiles(ctx: ToolContext) {
+  const ws = ctx.workspace;
+  if (!ws?.size) return undefined;
+  return [...ws.entries()].map(([path, content]) => ({ path, content }));
+}
+const writeFiles: AgentTool = {
+  name: "write_files",
+  label: "كتابة ملفات المشروع",
+  description:
+    "Create/overwrite files in the project workspace (in memory for this task). Write a big project over several calls (e.g. index.html, then styles.css, then app.js). Then call publish_site or github__push_files WITHOUT files to ship the whole workspace.",
+  parameters: { type: "object", properties: { files: { type: "array", items: { type: "object", properties: { path: { type: "string" }, content: { type: "string" } }, required: ["path", "content"] } } }, required: ["files"] },
+  async run(args, ctx) {
+    const list = looseJson(args.files);
+    const arr = (Array.isArray(list) ? list : list && typeof list === "object" ? Object.entries(list).map(([path, content]) => ({ path, content })) : []) as { path: string; content: string }[];
+    if (!arr.length) throw new Error("files is empty");
+    ctx.workspace ??= new Map();
+    for (const f of arr.slice(0, 80)) {
+      const path = String(f.path ?? "").trim().replace(/^\.?\/+/, "");
+      if (!path || path.includes("..")) throw new Error(`invalid path: ${f.path}`);
+      ctx.workspace.set(path, String(f.content ?? ""));
+    }
+    const all = [...ctx.workspace.entries()].map(([p, c]) => `${p} (${c.length.toLocaleString("en")} chars)`);
+    return { text: `Workspace now has ${all.length} file(s):\n${all.join("\n")}`, summary: `${arr.length} ملف · المجموع ${all.length}` };
+  },
+};
+const readWorkspace: AgentTool = {
+  name: "read_files",
+  label: "قراءة ملفات المشروع",
+  description: "List the workspace files, or read one file's content (pass path).",
+  parameters: { type: "object", properties: { path: { type: "string" } }, required: [] },
+  async run(args, ctx) {
+    const ws = ctx.workspace ?? new Map<string, string>();
+    if (args.path) {
+      const c = ws.get(String(args.path).replace(/^\.?\/+/, ""));
+      if (c == null) throw new Error("file not found in workspace");
+      return { text: clip(c, 30_000), summary: `${c.length.toLocaleString("en")} حرف` };
+    }
+    return { text: [...ws.keys()].join("\n") || "(workspace is empty)", summary: `${ws.size} ملف` };
+  },
+};
+
+// ------------------------------------------------------------------ live check
+const checkUrl: AgentTool = {
+  name: "check_url",
+  label: "فحص الرابط",
+  description: "Verify a deployed site is live: fetches the URL (retrying for up to ~60 s while a deploy propagates) and returns the HTTP status and page title.",
+  parameters: { type: "object", properties: { url: { type: "string" }, wait_seconds: { type: "integer", description: "max seconds to keep retrying (default 60)" } }, required: ["url"] },
+  async run(args, ctx) {
+    const u = assertPublicUrl(String(args.url ?? ""));
+    const until = Date.now() + Math.min(Number(args.wait_seconds) || 60, 90) * 1000;
+    let last = "";
+    for (let i = 0; ; i++) {
+      try {
+        const r = await fetch(u, { headers: { "User-Agent": UA }, redirect: "follow", signal: sigWith(ctx.signal, 15_000) });
+        const body = (await r.text()).slice(0, 200_000);
+        const title = /<title[^>]*>([^<]*)<\/title>/i.exec(body)?.[1]?.trim() ?? "";
+        last = `HTTP ${r.status} · ${r.url}${title ? ` · title: ${title}` : ""} · ${body.length.toLocaleString("en")} bytes`;
+        if (r.ok) return { text: `LIVE ✓ ${last}`, summary: `✓ ${r.status}${title ? ` · ${title.slice(0, 40)}` : ""}` };
+      } catch (e) {
+        last = (e as Error).message;
+      }
+      if (Date.now() > until || ctx.signal.aborted) break;
+      await new Promise((r) => setTimeout(r, 6000));
+    }
+    return { text: `NOT LIVE YET: ${last}`, summary: `✗ ${last.slice(0, 60)}` };
+  },
+};
+
+export const BUILTIN_TOOLS: AgentTool[] = [webSearch, webFetch, generateImage, writeFiles, readWorkspace, publishSite, checkUrl];
 
 // ------------------------------------------------------------------ MCP servers
 type ServerRow = Awaited<ReturnType<typeof prisma.mcpServer.findMany>>[number];
@@ -269,6 +405,7 @@ function b64(s: string) {
 }
 
 /** REST fallback for GitHub if the MCP server is unreachable or rejects the token. */
+const ctxRef: { current: ToolContext | null } = { current: null };
 function githubRestTools(): AgentTool[] {
   const T = async () => {
     const t = await githubUserToken();
@@ -281,7 +418,8 @@ function githubRestTools(): AgentTool[] {
     label: `GitHub · ${label}`,
     description: `[GitHub] ${description}`,
     parameters: { type: "object", properties, required },
-    async run(args) {
+    async run(args, ctx) {
+      ctxRef.current = ctx;
       const out = await fn(args, await T());
       const text = typeof out === "string" ? out : JSON.stringify(out, null, 1);
       return { text: clip(text), summary: `${text.length.toLocaleString("en")} حرف` };
@@ -335,6 +473,67 @@ function githubRestTools(): AgentTool[] {
       const r = await ghRest(t, "POST", `/repos/${str(a.owner)}/${str(a.repo)}/issues`, { title: str(a.title), body: String(a.body ?? "") });
       return { number: r.number, url: r.html_url };
     }),
+    mk("create_repo", "مستودع جديد", "Create a new repository for the user (initialized with a README so files can be pushed right away). Public repos can be deployed free with enable_pages.", { name: { type: "string" }, description: { type: "string" }, private: { type: "boolean" } }, ["name"], async (a, t) => {
+      const r = await ghRest(t, "POST", "/user/repos", { name: str(a.name), description: String(a.description ?? ""), private: Boolean(a.private), auto_init: true });
+      return { full_name: r.full_name, owner: r.owner?.login, repo: r.name, default_branch: r.default_branch, html_url: r.html_url, private: r.private };
+    }),
+    mk("push_files", "رفع ملفات (commit واحد)", "Commit many files at once (create/update; set delete:true to remove a file) on a branch in ONE commit. Best way to write a whole project.", { ...repoP, branch: { type: "string", description: "Default: repo default branch. Created from default if missing." }, message: { type: "string" }, files: { type: "array", description: "Omit to push the whole project workspace (write_files)", items: { type: "object", properties: { path: { type: "string" }, content: { type: "string" }, delete: { type: "boolean" } }, required: ["path"] } } }, ["owner", "repo", "message"], async (a, t) => {
+      const base = `/repos/${str(a.owner)}/${str(a.repo)}`;
+      const info = await ghRest(t, "GET", base);
+      const branch = str(a.branch) || info.default_branch;
+      let head: string;
+      try {
+        head = (await ghRest(t, "GET", `${base}/git/ref/heads/${encodeURIComponent(branch)}`)).object.sha;
+      } catch {
+        const def = (await ghRest(t, "GET", `${base}/git/ref/heads/${encodeURIComponent(info.default_branch)}`)).object.sha;
+        await ghRest(t, "POST", `${base}/git/refs`, { ref: `refs/heads/${branch}`, sha: def });
+        head = def;
+      }
+      const commit = await ghRest(t, "GET", `${base}/git/commits/${head}`);
+      const rawFiles = looseJson(a.files ?? (ctxRef.current ? workspaceFiles(ctxRef.current) : undefined));
+      const files = (Array.isArray(rawFiles) ? rawFiles : rawFiles && typeof rawFiles === "object" ? Object.entries(rawFiles).map(([path, content]) => ({ path, content: String(content) })) : []).slice(0, 200) as { path: string; content?: string; delete?: boolean }[];
+      if (!files.length) throw new Error("files is empty");
+      const tree = await ghRest(t, "POST", `${base}/git/trees`, {
+        base_tree: commit.tree.sha,
+        tree: files.map((f) => (f.delete ? { path: str(f.path).replace(/^\/+/, ""), mode: "100644", type: "blob", sha: null } : { path: str(f.path).replace(/^\/+/, ""), mode: "100644", type: "blob", content: String(f.content ?? "") })),
+      });
+      const c = await ghRest(t, "POST", `${base}/git/commits`, { message: str(a.message) || "Update files", tree: tree.sha, parents: [head] });
+      await ghRest(t, "PATCH", `${base}/git/refs/heads/${encodeURIComponent(branch)}`, { sha: c.sha });
+      return { branch, commit: c.sha, url: `${info.html_url}/commit/${c.sha}`, files: files.length };
+    }),
+    mk("enable_pages", "نشر على GitHub Pages", "Deploy a repo as a website with GitHub Pages (free for public repos). Serves index.html from the branch root (or /docs). Returns the live URL (first build takes ~1 minute).", { ...repoP, branch: { type: "string" }, path: { type: "string", description: "'/' (default) or '/docs'" } }, ["owner", "repo"], async (a, t) => {
+      const base = `/repos/${str(a.owner)}/${str(a.repo)}`;
+      const branch = str(a.branch) || (await ghRest(t, "GET", base)).default_branch;
+      let r;
+      try {
+        r = await ghRest(t, "POST", `${base}/pages`, { source: { branch, path: str(a.path) === "/docs" ? "/docs" : "/" } });
+      } catch (e) {
+        if (!/409|already/i.test((e as Error).message)) throw e;
+        r = await ghRest(t, "GET", `${base}/pages`);
+      }
+      return { url: r.html_url, status: r.status ?? "building" };
+    }),
+    mk("deploy_links", "روابط نشر بضغطة", "One-tap deploy links for a GitHub repo on Vercel, Netlify and Cloudflare (the user taps, signs in to the service, and it imports + deploys the repo; later pushes redeploy automatically). Use when the user wants Vercel/Netlify/Cloudflare and no deploy connector tools exist.", { ...repoP }, ["owner", "repo"], async (a) => {
+      const repoUrl = `https://github.com/${str(a.owner)}/${str(a.repo)}`;
+      return {
+        vercel: `https://vercel.com/new/import?s=${encodeURIComponent(repoUrl)}`,
+        netlify: `https://app.netlify.com/start/deploy?repository=${encodeURIComponent(repoUrl)}`,
+        cloudflare: `https://deploy.workers.cloudflare.com/?url=${encodeURIComponent(repoUrl)}`,
+        note: "Cloudflare needs a wrangler.jsonc in the repo (static: {\"name\":\"<repo>\",\"compatibility_date\":\"2025-09-01\",\"assets\":{\"directory\":\"./public\"}} with the site in /public).",
+      };
+    }),
+    mk("merge_pull_request", "دمج PR", "Merge a pull request (squash by default).", { ...repoP, number: { type: "integer" }, method: { type: "string", description: "merge | squash | rebase" } }, ["owner", "repo", "number"], async (a, t) => {
+      const r = await ghRest(t, "PUT", `/repos/${str(a.owner)}/${str(a.repo)}/pulls/${Number(a.number)}/merge`, { merge_method: ["merge", "squash", "rebase"].includes(str(a.method)) ? str(a.method) : "squash" });
+      return { merged: r.merged, sha: r.sha, message: r.message };
+    }),
+    mk("list_branches", "الفروع", "List branches of a repo.", { ...repoP }, ["owner", "repo"], async (a, t) => {
+      const r = await ghRest(t, "GET", `/repos/${str(a.owner)}/${str(a.repo)}/branches?per_page=50`);
+      return r.map((x: any) => x.name);
+    }),
+    mk("list_workflow_runs", "تشغيلات Actions", "List recent GitHub Actions runs of a repo (status of CI/deploys).", { ...repoP }, ["owner", "repo"], async (a, t) => {
+      const r = await ghRest(t, "GET", `/repos/${str(a.owner)}/${str(a.repo)}/actions/runs?per_page=10`);
+      return (r.workflow_runs ?? []).map((x: any) => ({ name: x.name, status: x.status, conclusion: x.conclusion, branch: x.head_branch, url: x.html_url, created_at: x.created_at }));
+    }),
     mk("add_comment", "تعليق", "Comment on an issue or pull request.", { ...repoP, number: { type: "integer" }, body: { type: "string" } }, ["owner", "repo", "number", "body"], async (a, t) => {
       const r = await ghRest(t, "POST", `/repos/${str(a.owner)}/${str(a.repo)}/issues/${Number(a.number)}/comments`, { body: String(a.body ?? "") });
       return { url: r.html_url };
@@ -361,6 +560,11 @@ export async function loadMcpTools(signal: AbortSignal): Promise<{ tools: AgentT
 
   for (const s of servers) {
     if ((s.authType === "oauth" || s.authType === "github") && !s.connectedAt) continue; // not connected yet
+    if (s.authType === "github") {
+      // GitHub uses our REST toolset (reliable with GitHub App user tokens, includes multi-file commits & Pages deploy)
+      tools.push(...githubRestTools().filter((t) => !used.has(t.name)));
+      continue;
+    }
     let list = (Array.isArray(s.tools) ? s.tools : []) as unknown as McpToolInfo[];
     if (!list.length) {
       try {

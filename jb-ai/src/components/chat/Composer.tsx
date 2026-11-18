@@ -1,5 +1,5 @@
 "use client";
-import { ArrowUp, Bot, FileText, Globe, ImageIcon, Lightbulb, Loader2, Plus, Square, X } from "lucide-react";
+import { ArrowUp, Bot, Check, FileText, Globe, ImageIcon, Lightbulb, Loader2, Paperclip, Plug, Plus, Square, X, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useToast } from "../ui/Toast";
 
@@ -31,7 +31,21 @@ export function Composer(props: {
   onToggleImage?: () => void;
   agent?: boolean;
   setAgent?: (v: boolean) => void;
+  onOpenConnectors?: () => void;
+  connectorsCount?: number;
 }) {
+  const [menu, setMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => menuRef.current && !menuRef.current.contains(e.target as Node) && setMenu(false);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMenu(false);
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, []);
   const [text, setText] = useState("");
   const [atts, setAtts] = useState<PendingAttachment[]>([]);
   const [uploading, setUploading] = useState(0);
@@ -124,51 +138,52 @@ export function Composer(props: {
       />
       <div className="flex items-center gap-1 px-2 pb-2 pt-1">
         <input ref={fileRef} type="file" multiple hidden onChange={(e) => e.target.files && upload(e.target.files).then(() => (e.target.value = ""))} />
-        <button className="btn-ghost h-9 w-9 p-0" onClick={() => (props.onRequireAuth ? props.onRequireAuth() : fileRef.current?.click())} aria-label="إرفاق ملفات" title="أرفق صورًا أو ملفات نصية">
-          {uploading ? <Loader2 size={18} className="animate-spin" /> : <Plus size={19} />}
-        </button>
-        {props.onToggleImage && (
+        <div className="relative" ref={menuRef}>
           <button
-            className={`btn h-9 px-2.5 ${props.imageMode ? "bg-fuchsia-500/20 text-fuchsia-300" : "text-slate-300 hover:bg-ink-700"}`}
-            onClick={props.onToggleImage}
-            aria-pressed={props.imageMode}
-            title={props.imageMode ? "رجوع للمحادثة" : "إنشاء صورة"}
-            data-testid="image-mode"
+            className={`flex h-9 w-9 items-center justify-center rounded-full border border-ink-500 text-slate-200 hover:bg-ink-700 ${menu ? "bg-ink-700" : ""}`}
+            onClick={() => (props.onRequireAuth ? props.onRequireAuth() : setMenu((m) => !m))}
+            aria-label="المزيد: إرفاق، صورة، وكيل، موصّلات"
+            aria-expanded={menu}
+            data-testid="plus-menu"
           >
-            <ImageIcon size={16} /> <span className="hidden sm:inline">صورة</span>
+            {uploading ? <Loader2 size={18} className="animate-spin" /> : <Plus size={19} className={`transition ${menu ? "rotate-45" : ""}`} />}
+          </button>
+          {menu && (
+            <div className="absolute bottom-full start-0 z-30 mb-2 w-64 overflow-hidden rounded-2xl border border-ink-600 bg-ink-900 p-1.5 shadow-2xl" role="menu" data-testid="plus-panel">
+              <MenuItem icon={Paperclip} label="إرفاق صور وملفات" onClick={() => { setMenu(false); fileRef.current?.click(); }} />
+              {props.onToggleImage && <MenuItem icon={ImageIcon} label="إنشاء صورة" active={props.imageMode} onClick={() => { setMenu(false); props.onToggleImage!(); }} />}
+              {props.setAgent && <MenuItem icon={Bot} label="وضع الوكيل" hint="يبني وينشر بالأدوات" active={props.agent} onClick={() => { setMenu(false); props.setAgent!(!props.agent); }} testid="agent-mode" />}
+              {props.thinkAvailable && <MenuItem icon={Lightbulb} label="تفكير أعمق" active={props.think} onClick={() => { setMenu(false); props.setThink(!props.think); }} />}
+              {props.searchAvailable && (
+                <MenuItem icon={Globe} label="بحث في الويب" active={props.search} onClick={() => { setMenu(false); if (props.searchLocked) toast("البحث في الويب متاح في الباقات المدفوعة.", "info"); else props.setSearch(!props.search); }} />
+              )}
+              {props.onOpenConnectors && (
+                <>
+                  <div className="my-1 h-px bg-ink-700" />
+                  <MenuItem icon={Plug} label="الموصّلات" hint={props.connectorsCount ? `${props.connectorsCount} مربوط` : "GitHub و Netlify و Supabase…"} onClick={() => { setMenu(false); props.onOpenConnectors!(); }} />
+                </>
+              )}
+            </div>
+          )}
+        </div>
+        {props.onOpenConnectors && (
+          <button
+            className="flex h-9 items-center gap-1 rounded-full px-2.5 text-[13px] text-slate-300 hover:bg-ink-700"
+            onClick={props.onOpenConnectors}
+            title="الموصّلات"
+            data-testid="connectors-button"
+          >
+            <Plug size={16} />
+            <span className="hidden sm:inline">الموصّلات</span>
+            {props.connectorsCount ? <span className="rounded-full bg-emerald-500/20 px-1.5 text-[11px] font-semibold text-emerald-300">{props.connectorsCount}</span> : null}
           </button>
         )}
-        {props.setAgent && (
-          <button
-            className={`btn h-9 px-2.5 ${props.agent ? "bg-sky-500/20 text-sky-300 ring-1 ring-sky-500/40" : "text-slate-300 hover:bg-ink-700"}`}
-            onClick={() => props.setAgent!(!props.agent)}
-            aria-pressed={props.agent}
-            title={props.agent ? "وضع الوكيل شغّال: يستخدم الأدوات (GitHub و MCP والويب والصور) بخطوات متعددة" : "شغّل وضع الوكيل"}
-            data-testid="agent-mode"
-          >
-            <Bot size={16} /> <span className={props.agent ? "inline" : "hidden sm:inline"}>وكيل</span>
-          </button>
-        )}
-        {props.thinkAvailable && (
-          <button
-            className={`btn h-9 px-2.5 ${props.think ? "bg-brand-500/20 text-brand-400" : "text-slate-300 hover:bg-ink-700"}`}
-            onClick={() => props.setThink(!props.think)}
-            aria-pressed={props.think}
-            title="تفكير: استخدم نموذج تفكير للمسائل الأصعب"
-          >
-            <Lightbulb size={16} /> <span className="hidden sm:inline">تفكير</span>
-          </button>
-        )}
-        {props.searchAvailable && (
-          <button
-            className={`btn h-9 px-2.5 ${props.search ? "bg-brand-500/20 text-brand-400" : "text-slate-300 hover:bg-ink-700"}`}
-            onClick={() => (props.searchLocked ? toast("البحث في الويب متاح في الباقات المدفوعة.", "info") : props.setSearch(!props.search))}
-            aria-pressed={props.search}
-            title={props.searchLocked ? "رقِّ باقتك لاستخدام البحث في الويب" : "ابحث في الويب"}
-          >
-            <Globe size={16} /> <span className="hidden sm:inline">بحث</span>
-          </button>
-        )}
+        <div className="flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
+          {props.agent && props.setAgent && <Chip icon={Bot} label="وكيل" cls="bg-sky-500/15 text-sky-300 ring-1 ring-sky-500/30" onOff={() => props.setAgent!(false)} />}
+          {props.imageMode && props.onToggleImage && <Chip icon={ImageIcon} label="صورة" cls="bg-fuchsia-500/15 text-fuchsia-300" onOff={props.onToggleImage} />}
+          {props.think && props.thinkAvailable && <Chip icon={Lightbulb} label="تفكير" cls="bg-brand-500/15 text-brand-400" onOff={() => props.setThink(false)} />}
+          {props.search && props.searchAvailable && <Chip icon={Globe} label="بحث" cls="bg-brand-500/15 text-brand-400" onOff={() => props.setSearch(false)} />}
+        </div>
         <div className="flex-1" />
         {props.streaming ? (
           <button className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-ink-950 hover:bg-slate-200" onClick={props.onStop} aria-label="إيقاف التوليد" data-testid="stop-button">
@@ -187,5 +202,26 @@ export function Composer(props: {
         )}
       </div>
     </div>
+  );
+}
+
+function MenuItem({ icon: I, label, hint, active, onClick, testid }: { icon: LucideIcon; label: string; hint?: string; active?: boolean; onClick: () => void; testid?: string }) {
+  return (
+    <button role="menuitem" className="flex min-h-[44px] w-full items-center gap-3 rounded-xl px-3 py-2 text-start text-sm hover:bg-ink-700" onClick={onClick} data-testid={testid}>
+      <I size={17} className={active ? "text-sky-300" : "text-slate-300"} />
+      <span className="flex-1">
+        {label}
+        {hint && <span className="block text-[11px] text-slate-500">{hint}</span>}
+      </span>
+      {active && <Check size={15} className="text-sky-300" />}
+    </button>
+  );
+}
+
+function Chip({ icon: I, label, cls, onOff }: { icon: LucideIcon; label: string; cls: string; onOff: () => void }) {
+  return (
+    <button className={`flex h-8 shrink-0 items-center gap-1 rounded-full px-2.5 text-[13px] font-medium ${cls}`} onClick={onOff} title={`إيقاف ${label}`}>
+      <I size={14} /> {label} <X size={12} className="opacity-70" />
+    </button>
   );
 }
