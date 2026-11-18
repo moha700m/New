@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/components/api";
 import { AuthShell, FormError } from "@/components/auth/AuthShell";
@@ -46,8 +46,19 @@ function LoginForm() {
 }
 
 export default function LoginPage() {
+  const [registrationOpen, setRegistrationOpen] = useState(false);
+  useEffect(() => {
+    fetch("/api/config", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((c) => setRegistrationOpen(Boolean(c?.site?.registrationOpen)))
+      .catch(() => {});
+  }, []);
   return (
-    <AuthShell title="أهلًا بعودتك" subtitle="سجّل دخولك لمتابعة محادثاتك." footer={<>ليس لديك حساب؟ <Link href="/register" className="text-brand-400">سجّل مجانًا</Link></>}>
+    <AuthShell
+      title="أهلًا بعودتك"
+      subtitle={registrationOpen ? "سجّل دخولك لمتابعة محادثاتك." : "الموقع خاص — سجّل دخولك للمتابعة."}
+      footer={registrationOpen ? <>ليس لديك حساب؟ <Link href="/register" className="text-brand-400">سجّل مجانًا</Link></> : undefined}
+    >
       <Suspense>
         <LoginForm />
       </Suspense>

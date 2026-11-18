@@ -2,6 +2,7 @@ import { z } from "zod";
 import { needsVerification, requireUser } from "@/lib/auth";
 import { executeChat, prepareChat } from "@/lib/gateway";
 import { errorResponse, HttpError, parseBody } from "@/lib/http";
+import { isOwnerAccount } from "@/lib/access";
 import { getUserPlan } from "@/lib/plans";
 import { rateLimit } from "@/lib/rate-limit";
 import { getSettings } from "@/lib/settings";
@@ -35,7 +36,7 @@ export async function POST(req: Request) {
     if (settings.maintenanceMode) throw new HttpError(503, "الخدمة تحت الصيانة. يرجى المحاولة لاحقًا.");
     if (await needsVerification(user)) throw new HttpError(403, "يرجى تأكيد بريدك الإلكتروني قبل بدء المحادثة.", "email_unverified");
     input = await parseBody(req, schema);
-    await rateLimit(`chat:${user.id}`, settings.chatRateLimitPerMinute, 60_000);
+    if (!isOwnerAccount(user)) await rateLimit(`chat:${user.id}`, settings.chatRateLimitPerMinute, 60_000);
     const { plan } = await getUserPlan(user.id);
     prep = await prepareChat(user.id, plan, input, settings);
   } catch (e) {

@@ -1,4 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { isPrivateMode } from "./lib/access";
+
+/** Reachable without a session while the site is private (everything else needs the owner to be signed in). */
+const PUBLIC_PAGES = ["/login", "/forgot-password", "/reset-password", "/verify-email"];
+const PUBLIC_API = ["/api/auth/login", "/api/auth/logout", "/api/auth/me", "/api/auth/forgot", "/api/auth/reset", "/api/auth/verify", "/api/health", "/api/config", "/api/webhooks/"];
+const isPublic = (path: string, list: string[]) => list.some((p) => path === p || (p.endsWith("/") ? path.startsWith(p) : path.startsWith(`${p}/`)));
 
 /**
  * CSRF defence: state-changing API requests must come from our own origin.
@@ -19,10 +25,21 @@ export function middleware(req: NextRequest) {
     }
     if (originHost !== host) return NextResponse.json({ error: "تم حظر طلب من موقع آخر" }, { status: 403 });
   }
-  if (pathname.startsWith("/admin") && !req.cookies.get("jb_session")) {
+  const hasSession = Boolean(req.cookies.get("jb_session"));
+  if (isPrivateMode()) {
+    if (pathname === "/register" || pathname.startsWith("/register/")) return NextResponse.redirect(new URL("/login", req.url));
+    if (pathname.startsWith("/api/")) {
+      if (!hasSession && !isPublic(pathname, PUBLIC_API)) return NextResponse.json({ error: "الموقع خاص — يجب تسجيل الدخول", code: "unauthenticated" }, { status: 401 });
+    } else if (!hasSession && !isPublic(pathname, PUBLIC_PAGES)) {
+      const next = pathname === "/" ? "" : `?next=${encodeURIComponent(pathname + req.nextUrl.search)}`;
+      return NextResponse.redirect(new URL(`/login${next}`, req.url));
+    }
+  }
+  if (pathname.startsWith("/admin") && !hasSession) {
     return NextResponse.redirect(new URL("/login?next=/admin", req.url));
   }
   return NextResponse.next();
 }
 
-export const config = { matcher: ["/api/:path*", "/admin/:path*"] };
+// Everything except Next.js internals and static files (paths with a file extension).
+export const config = { matcher: ["/((?!_next/|.*\\.[a-zA-Z0-9]+$).*)"] };

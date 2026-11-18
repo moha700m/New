@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { audit } from "@/lib/audit";
 import { createSession, hashPassword, ownerEmailMatches, sendVerificationEmail } from "@/lib/auth";
+import { isPrivateMode } from "@/lib/access";
 import { prisma } from "@/lib/db";
 import { clientIp, handler, HttpError, json, parseBody } from "@/lib/http";
 import { rateLimit } from "@/lib/rate-limit";
@@ -13,6 +14,7 @@ const schema = z.object({
 });
 
 export const POST = handler(async (req: Request) => {
+  if (isPrivateMode()) throw new HttpError(403, "التسجيل مغلق — الموقع خاص حاليًا.", "registration_closed");
   await rateLimit(`register:${clientIp(req)}`, 10, 3600_000);
   const body = await parseBody(req, schema);
   const settings = await getSettings();

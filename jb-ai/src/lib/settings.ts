@@ -1,4 +1,5 @@
 import "server-only";
+import { isPrivateMode } from "./access";
 import { prisma } from "./db";
 
 export interface SystemSettings {
@@ -27,7 +28,9 @@ export const DEFAULT_SETTINGS: SystemSettings = {
 
 export async function getSettings(): Promise<SystemSettings> {
   const row = await prisma.setting.findUnique({ where: { key: "system" } });
-  return { ...DEFAULT_SETTINGS, ...((row?.value as Partial<SystemSettings>) ?? {}) };
+  const s = { ...DEFAULT_SETTINGS, ...((row?.value as Partial<SystemSettings>) ?? {}) };
+  // Private mode keeps registration closed regardless of the admin toggle.
+  return isPrivateMode() ? { ...s, registrationOpen: false } : s;
 }
 
 export async function saveSettings(patch: Partial<SystemSettings>): Promise<SystemSettings> {

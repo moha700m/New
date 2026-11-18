@@ -1,5 +1,6 @@
 import "server-only";
 import type { Plan } from "@prisma/client";
+import { isOwnerAccount } from "./access";
 import { prisma } from "./db";
 import { HttpError } from "./http";
 
@@ -10,8 +11,31 @@ export async function getDefaultPlan(): Promise<Plan> {
 }
 
 /** Resolve the plan currently in effect for a user (expired/canceled subscriptions fall back to the default plan). */
+/** The owner always gets the top plan with every limit removed and every feature on. */
+async function ownerUnlimitedPlan(): Promise<Plan> {
+  const top =
+    (await prisma.plan.findFirst({ where: { active: true }, orderBy: [{ sortOrder: "desc" }, { priceMonthlyCents: "desc" }] })) ??
+    (await getDefaultPlan());
+  return {
+    ...top,
+    name: `${top.name} (بلا حدود)`,
+    dailyMessageLimit: null,
+    monthlyMessageLimit: null,
+    monthlyTokenLimit: null,
+    maxUploadMb: Math.max(top.maxUploadMb, 100),
+    allowUploads: true,
+    allowWebSearch: true,
+    allowImageGeneration: true,
+    allowAllModels: true,
+  };
+}
+
 export async function getUserPlan(userId: string) {
-  const sub = await prisma.subscription.findUnique({ where: { userId }, include: { plan: true } });
+  const [sub, user] = await Promise.all([
+    prisma.subscription.findUnique({ where: { userId }, include: { plan: true } }),
+    prisma.user.findUnique({ where: { id: userId }, select: { role: true, email: true } }),
+  ]);
+  if (user && isOwnerAccount(user)) return { plan: await ownerUnlimitedPlan(), subscription: sub };
   const now = new Date();
   if (sub && (sub.status === "ACTIVE" || sub.status === "TRIALING" || sub.status === "PAST_DUE")) {
     if (!sub.currentPeriodEnd || sub.currentPeriodEnd > now) return { plan: sub.plan, subscription: sub };

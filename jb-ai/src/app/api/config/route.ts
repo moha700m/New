@@ -1,3 +1,4 @@
+import { isPrivateMode } from "@/lib/access";
 import { getCurrentUser } from "@/lib/auth";
 import { SERVERLESS } from "@/lib/config-bus";
 import { getPublicCatalog } from "@/lib/engine";
@@ -17,8 +18,9 @@ export const GET = handler(async () => {
       site: { name: settings.siteName, tagline: settings.tagline, maintenanceMode: settings.maintenanceMode, registrationOpen: settings.registrationOpen },
       planKey,
       live: SERVERLESS ? { mode: "poll", intervalMs: 5000 } : { mode: "sse", intervalMs: 30000 },
-      defaults: catalog.defaults,
-      models: catalog.models.map((m) => ({ ...m, allowed: planKey ? m.plans.includes(planKey) : false })),
+      private: isPrivateMode(),
+      defaults: isPrivateMode() && !user ? { text: null, reasoning: null, code: null, vision: null, image: null } : catalog.defaults,
+      models: (isPrivateMode() && !user ? [] : catalog.models).map((m) => ({ ...m, allowed: planKey ? m.plans.includes(planKey) : false })),
     },
     { headers: { "Cache-Control": "no-store" } },
   );

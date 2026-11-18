@@ -2,6 +2,7 @@ import "server-only";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import type { Role, TokenType, User } from "@prisma/client";
+import { isOwnerAccount, isPrivateMode } from "./access";
 import { prisma } from "./db";
 import { randomToken, sha256 } from "./crypto";
 import { HttpError } from "./http";
@@ -62,6 +63,7 @@ export async function getCurrentUser(): Promise<SafeUser | null> {
     include: { user: { select: { id: true, email: true, name: true, role: true, emailVerifiedAt: true, createdAt: true, disabled: true } } },
   });
   if (!session || session.expiresAt < new Date() || session.user.disabled) return null;
+  if (isPrivateMode() && !isOwnerAccount(session.user)) return null;
   if (Date.now() - session.lastUsedAt.getTime() > 3600_000) {
     await prisma.session.update({ where: { id: session.id }, data: { lastUsedAt: new Date() } }).catch(() => {});
   }
@@ -89,7 +91,7 @@ export async function requireOwner(): Promise<SafeUser> {
 
 /** Whether the user must verify their email before chatting. */
 export async function needsVerification(u: SafeUser) {
-  if (u.emailVerifiedAt) return false;
+  if (u.emailVerifiedAt || isOwnerAccount(u)) return false;
   const s = await getSettings();
   return s.requireEmailVerification && mailerConfigured();
 }
