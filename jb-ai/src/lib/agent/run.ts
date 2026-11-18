@@ -262,6 +262,17 @@ export async function runAgent(opts: {
         .filter(Boolean)
         .join("\n")
     : "";
+  // a deploy target was named and it isn't the built-in hosting → the built-in hosting is off for this run
+  if (mentions.some((m) => m.kind === "deploy" || m.kind === "connector") && !mentions.some((m) => m.key === "site")) active.delete("publish_site");
+  if (missingMentions.length) {
+    // don't spend a model call: the named target can't be used until it's connected
+    await mcp.close().catch(() => {});
+    const names = [...new Set(missingMentions)];
+    const text = `${names.map((n) => `«${n}»`).join(" و")} مو مربوط للحين، فما أقدر أستخدمه.\n\nاضغط زر الموصّلات 🔌 ثم «ربط» عند ${names.join(" و")}، أو اضغط «ربط» اللي على الإشارة نفسها، وبعدها أرسل طلبك مرة ثانية.\n\nولو تبي أنشره الحين على رابط موقعك الفوري، اكتب **@موقعي** بدالها.`;
+    setPhase("done", "خلص");
+    emit({ type: "delta", text });
+    return { text, reasoning: "", usage: {}, steps };
+  }
   const lazyGroups = () => groups.filter((g) => !g.core && g.tools.some((t) => !active.has(t.name)));
   const useConnector: AgentTool = {
     name: "use_connector",
@@ -329,6 +340,8 @@ export async function runAgent(opts: {
         return `ERROR: ${(e as Error).message}`;
       }
     }
+    if (name === "publish_site" && !active.has("publish_site"))
+      return `ERROR: publish_site is off — the user asked to deploy with ${mentions.map((m) => `@${m.token}`).join(", ")}. Use that target's tools instead.`;
     const step = pushStep({ kind: "tool", name, label: tool?.label ?? name, args: argsSummary(args), status: "running" });
     const t0 = Date.now();
     if (!tool) {
