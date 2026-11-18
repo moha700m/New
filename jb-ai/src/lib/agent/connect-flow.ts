@@ -3,7 +3,7 @@ import type { McpServer } from "@prisma/client";
 import { prisma } from "../db";
 import { CONNECTOR_PRESETS } from "./mcp-admin";
 import { probeMcp, startMcpOAuth } from "./oauth";
-import { connectServer } from "./tools";
+import { connectServer, isAuthError, markNeedsReconnect } from "./tools";
 
 /** Finds (or creates from a preset) the MCP server row to connect. */
 export async function resolveServer(q: { serverId?: string | null; preset?: string | null }) {
@@ -38,6 +38,11 @@ export async function syncTools(s: McpServer) {
       await c.close();
     }
   } catch (e) {
+    if (isAuthError(e)) {
+      // the provider issued a token its own MCP endpoint refuses: don't leave a half-connected connector around
+      await markNeedsReconnect(s.id, s.name, (e as Error).message);
+      throw new Error(`${s.name} وافق على الدخول بس خادمه رفض التوكن. جرّب «ربط» مرة ثانية${s.slug === "zapier" ? " — وتأكد إن عندك خادم MCP مفعّل في mcp.zapier.com" : ""}.`);
+    }
     await prisma.mcpServer.update({ where: { id: s.id }, data: { lastError: (e as Error).message.slice(0, 500) } });
     return 0;
   }

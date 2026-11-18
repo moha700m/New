@@ -3,7 +3,7 @@ import type { AiModel, Provider } from "@prisma/client";
 import { prisma } from "../db";
 import { getAdapter, OpenAICompatibleAdapter, ProviderError, type ChatMessageInput } from "../providers";
 import { toOpenAIMessages } from "../providers/openai-compatible";
-import { BUILTIN_TOOLS, clip, loadMcpTools, type AgentTool } from "./tools";
+import { BUILTIN_TOOLS, clip, loadMcpTools, type AgentTool, type ToolGroup } from "./tools";
 
 export const MAX_AGENT_STEPS = 25;
 
@@ -33,7 +33,7 @@ function argsSummary(args: Record<string, unknown>) {
   return s.length > 400 ? s.slice(0, 400) + "…" : s;
 }
 
-function systemPrompt(tools: AgentTool[], mcpErrors: string[]) {
+function systemPrompt(tools: AgentTool[], mcpErrors: string[], extraConnectors: ToolGroup[] = []) {
   const now = new Date().toISOString().slice(0, 10);
   return [
     `You are JB AI Agent — an autonomous assistant that completes tasks end-to-end using tools (like Claude Code). Today is ${now}.`,
@@ -51,18 +51,21 @@ function systemPrompt(tools: AgentTool[], mcpErrors: string[]) {
     "5) REPORT in short Saudi Arabic: what was built, the live link(s) first, and what the user can ask next.",
     "Be efficient: about 4 minutes in total per task — few, large tool calls; at most 2 generated images (1024x1024) and only when really useful.",
     `Available tools: ${tools.map((t) => t.name).join(", ") || "(none)"}.`,
-    mcpErrors.length ? `Note: some MCP servers failed to connect: ${mcpErrors.join("; ")}` : "",
+    extraConnectors.length
+      ? `More connected connectors (their tools load on demand — call use_connector first when the task needs them): ${extraConnectors.map((g) => `${g.slug} (${g.name}, ${g.tools.length} tools)`).join(", ")}.`
+      : "",
+    mcpErrors.length ? `Note: these connectors are unavailable right now (ignore them, don't mention unless relevant): ${mcpErrors.join(", ")}.` : "",
   ]
     .filter(Boolean)
     .join("\n");
 }
 
 /** Final answer when the model ran out of time: list what was done and any links produced. */
-function timeoutAnswer(steps: AgentStep[]) {
+function timeoutAnswer(steps: AgentStep[], reason?: string) {
   const done = steps.filter((s) => s.kind === "tool" && s.status === "ok");
   const links = [...new Set(done.flatMap((s) => (`${s.summary ?? ""} ${s.result ?? ""}`.match(/https?:\/\/[^\s"'<>)\]]+/g) ?? [])))].slice(0, 8);
   return [
-    "⏱️ الوقت المسموح للمهمة خلص قبل ما يكمّل النموذج الرد الأخير.",
+    reason ? `⚠️ النموذج ما رد في الخطوة الأخيرة (${reason}).` : "⏱️ الوقت المسموح للمهمة خلص قبل ما يكمّل النموذج الرد الأخير.",
     done.length ? `تم تنفيذ ${done.length} خطوة: ${done.map((s) => s.label ?? s.name).join("، ")}.` : "",
     links.length ? `الروابط:\n${links.map((l) => `- ${l}`).join("\n")}` : "",
     "قل «كمل» وأكمل من حيث وقفت.",
@@ -146,7 +149,7 @@ export async function runAgent(opts: {
   const pushStep = (s: Omit<AgentStep, "id">) => {
     const step = { id: `s${++seq}`, ...s } as AgentStep;
     steps.push(step);
-    opts.onProgress?.();
+    if (s.kind !== "info") opts.onProgress?.();
     emit({ type: "agent_step", step });
     return step;
   };
@@ -155,11 +158,65 @@ export async function runAgent(opts: {
     emit({ type: "agent_step", step });
   };
 
-  const mcp = await loadMcpTools(signal);
-  const tools = [...BUILTIN_TOOLS, ...mcp.tools].slice(0, 120);
-  const byName = new Map(tools.map((t) => [t.name, t]));
+  // Built-in tools are always available; connectors load in parallel with a short per-server timeout and never block.
+  const mcp = await loadMcpTools(signal).catch((e) => {
+    console.error("[agent] loading connectors failed", e);
+    return { groups: [] as ToolGroup[], tools: [] as AgentTool[], errors: [] as string[], reconnect: [] as string[], close: async () => {} };
+  });
+  const lastUser = [...opts.contextMessages].reverse().find((m) => m.role === "user")?.content?.toLowerCase() ?? "";
+  const ALIASES: Record<string, string[]> = {
+    cloudflare: ["cloudflare", "كلاود فلير", "كلاودفلير", "كلاوفلير", "workers", "ووركرز"],
+    "cloudflare-builds": ["cloudflare", "كلاود فلير", "كلاودفلير"],
+    netlify: ["netlify", "نتلفاي", "نتليفاي"],
+    supabase: ["supabase", "سوبابيس", "سوبا بيس"],
+    neon: ["neon", "نيون"],
+    railway: ["railway", "ريلوي", "ريل واي"],
+    linear: ["linear", "لينير"],
+    sentry: ["sentry", "سنتري"],
+    notion: ["notion", "نوشن"],
+    stripe: ["stripe", "سترايب"],
+    zapier: ["zapier", "زابير"],
+  };
+  const mentioned = (g: ToolGroup) => [g.slug, g.name.toLowerCase(), ...(ALIASES[g.slug] ?? [])].some((k) => k && lastUser.includes(k));
+  const MAX_ACTIVE = 70;
+  const active = new Set<string>([...BUILTIN_TOOLS.map((t) => t.name)]);
+  const activate = (g: ToolGroup, filter?: string) => {
+    const words = (filter ?? "").toLowerCase().split(/[\s,]+/).filter(Boolean);
+    const pick = words.length ? g.tools.filter((t) => words.some((w) => `${t.name} ${t.description}`.toLowerCase().includes(w))) : g.tools;
+    const room = Math.max(0, MAX_ACTIVE + 40 - active.size);
+    const chosen = pick.slice(0, Math.min(words.length ? 40 : 30, room));
+    chosen.forEach((t) => active.add(t.name));
+    return { chosen, total: pick.length };
+  };
+  const groups = mcp.groups;
+  for (const g of groups) if (g.core) g.tools.forEach((t) => active.add(t.name));
+  for (const g of groups) if (!g.core && (mentioned(g) || g.tools.length <= 6) && active.size + Math.min(g.tools.length, 30) <= MAX_ACTIVE) activate(g);
+  const lazyGroups = () => groups.filter((g) => !g.core && g.tools.some((t) => !active.has(t.name)));
+  const useConnector: AgentTool = {
+    name: "use_connector",
+    label: "تحميل أدوات موصّل",
+    description: "Load the tools of a connected connector so you can call them (e.g. Cloudflare, Netlify, Supabase, Neon, Linear, Sentry). Optional 'filter' = keywords to pick specific tools (e.g. 'worker deploy', 'project create'). Returns the loaded tool names.",
+    parameters: { type: "object", properties: { connector: { type: "string", description: "Connector slug", enum: groups.filter((g) => !g.core).map((g) => g.slug) }, filter: { type: "string", description: "Optional keywords" } }, required: ["connector"] },
+    async run(args) {
+      const g = groups.find((x) => x.slug === String(args.connector ?? "").trim() || x.name.toLowerCase() === String(args.connector ?? "").trim().toLowerCase());
+      if (!g) throw new Error(`Unknown connector. Available: ${groups.filter((x) => !x.core).map((x) => x.slug).join(", ")}`);
+      const { chosen, total } = activate(g, typeof args.filter === "string" ? args.filter : undefined);
+      const rest = g.tools.filter((t) => !active.has(t.name)).map((t) => t.name);
+      const text = [
+        `Loaded ${chosen.length} of ${total} matching ${g.name} tools. You can call them now:`,
+        ...chosen.map((t) => `- ${t.name}: ${t.description.replace(/^\[MCP: [^\]]+\]\s*/, "").slice(0, 160)}`),
+        rest.length ? `Not loaded (call use_connector again with a filter): ${rest.slice(0, 80).join(", ")}` : "",
+      ].filter(Boolean).join("\n");
+      return { text, summary: `${chosen.length} أداة من ${g.name}` };
+    },
+  };
+  const allTools = [...BUILTIN_TOOLS, ...mcp.tools, ...(groups.some((g) => !g.core) ? [useConnector] : [])];
+  if (allTools.includes(useConnector)) active.add(useConnector.name);
+  const byName = new Map(allTools.map((t) => [t.name, t]));
+  const activeTools = () => allTools.filter((t) => active.has(t.name));
+  const tools = allTools;
   const toolCtx = { userId: opts.userId, assistantMessageId: opts.assistantMessageId, emit, signal, workspace: new Map<string, string>() };
-  if (mcp.errors.length) pushStep({ kind: "info", text: `تعذّر الاتصال ببعض خوادم MCP: ${mcp.errors.join(" · ")}` });
+  if (mcp.reconnect.length) pushStep({ kind: "info", text: `${mcp.reconnect.join(" و")}: الربط انتهى — اضغط «ربط» مرة ثانية من الموصّلات. كمّلت بدونه.` });
 
   async function execTool(name: string, args: Record<string, unknown>): Promise<string> {
     const tool = byName.get(name);
@@ -168,7 +225,7 @@ export async function runAgent(opts: {
     if (!tool) {
       updateStep(step, { status: "error", result: `Unknown tool "${name}"`, ms: 0 });
       void persist();
-      return `ERROR: unknown tool "${name}". Available: ${tools.map((t) => t.name).join(", ")}`;
+      return `ERROR: unknown tool "${name}". Available: ${activeTools().map((t) => t.name).join(", ")}`;
     }
     try {
       // models sometimes send arrays/objects as JSON strings: coerce by the declared parameter type
@@ -197,7 +254,28 @@ export async function runAgent(opts: {
     }
   }
 
-  const sys = systemPrompt(tools, mcp.errors);
+  /** One model call with a per-step timeout; retries rate limits / 5xx / timeouts with backoff instead of hanging. */
+  async function callModel<T>(capMs: number, fn: (sig: AbortSignal) => Promise<T>): Promise<T> {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await fn(callSignal(capMs));
+      } catch (e) {
+        if (signal.aborted) throw e;
+        const pe = e instanceof ProviderError ? e : null;
+        const timedOut = (e as Error)?.name === "TimeoutError" || (e as Error)?.name === "AbortError" || /timed? ?out|aborted/i.test((e as Error)?.message ?? "");
+        const retry = timedOut || pe?.retryable || pe?.status === 429;
+        if (!retry || attempt >= 2 || remaining() < 50_000) {
+          if (timedOut && !pe) throw new ProviderError("النموذج تأخر في الرد", 408, true, true);
+          throw e;
+        }
+        pushStep({ kind: "info", text: pe?.status === 429 ? `المزوّد مزحوم — أعيد المحاولة (${attempt + 1}/2)…` : `النموذج تأخر — أعيد المحاولة (${attempt + 1}/2)…` });
+        await new Promise((r) => setTimeout(r, pe?.status === 429 ? 4000 * (attempt + 1) : 1000));
+      }
+    }
+  }
+  const STEP_MS = 120_000;
+  const sysFor = () => systemPrompt(activeTools(), mcp.errors, lazyGroups());
+  const sys = sysFor();
   const maxTokens = model.maxOutputTokens ? Math.min(model.maxOutputTokens, 16384) : 8192;
   const ctxMsgs = model.supportsVision ? opts.contextMessages : opts.contextMessages.map((m) => ({ ...m, images: undefined }));
   let finalText = "";
@@ -210,14 +288,16 @@ export async function runAgent(opts: {
     if (native) {
       const oa = adapter as OpenAICompatibleAdapter;
       const messages: Record<string, unknown>[] = [{ role: "system", content: sys }, ...(toOpenAIMessages(ctxMsgs) as Record<string, unknown>[])];
-      const spec = tools.map((t) => ({ type: "function" as const, function: { name: t.name, description: t.description.slice(0, 1000), parameters: t.parameters } }));
+      const specFor = () => activeTools().map((t) => ({ type: "function" as const, function: { name: t.name, description: t.description.slice(0, 1000), parameters: t.parameters } }));
       for (let round = 0; ; round++) {
         if (signal.aborted) break;
         const limitHit = toolCalls >= MAX_AGENT_STEPS || remaining() < 45_000;
         if (limitHit) messages.push({ role: "user", content: `Time/tool budget reached. Stop calling tools and give the final answer now with what you have (include any links already produced).` });
         let r;
         try {
-          r = await oa.completeWithTools({ model: model.modelId, messages, tools: limitHit ? undefined : spec, maxTokens, signal: callSignal(limitHit ? 40_000 : 180_000) });
+          messages[0] = { role: "system", content: sysFor() };
+          const spec = limitHit ? undefined : specFor();
+          r = await callModel(limitHit ? 40_000 : STEP_MS, (sig) => oa.completeWithTools({ model: model.modelId, messages, tools: spec, maxTokens, signal: sig }));
         } catch (e) {
           if (round === 0 && e instanceof ProviderError && (e.status === 400 || e.status === 422) && !signal.aborted) {
             pushStep({ kind: "info", text: "النموذج رفض استدعاء الأدوات الأصلي، تحويل لبروتوكول ReAct النصي." });
@@ -225,7 +305,7 @@ export async function runAgent(opts: {
             break;
           }
           if (!signal.aborted && round > 0) {
-            finalText = timeoutAnswer(steps);
+            finalText = timeoutAnswer(steps, (e as Error).message?.slice(0, 160));
             native = true;
             break;
           }
@@ -261,25 +341,32 @@ export async function runAgent(opts: {
 
     // ---------------------------------------------------------------- ReAct text protocol
     if (!native && !signal.aborted) {
-      const msgs: ChatMessageInput[] = [{ role: "system", content: `${sys}\n\n${reactProtocol(tools)}` }, ...ctxMsgs.filter((m) => m.role !== "system"), ];
+      const reactSys = () => `${sysFor()}\n\n${reactProtocol(activeTools())}`;
+      const msgs: ChatMessageInput[] = [{ role: "system", content: reactSys() }, ...ctxMsgs.filter((m) => m.role !== "system"), ];
       const extraSystem = ctxMsgs.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
-      if (extraSystem) msgs[0] = { role: "system", content: `${extraSystem}\n\n${msgs[0]!.content}` };
+      const setSys = () => (msgs[0] = { role: "system", content: extraSystem ? `${extraSystem}\n\n${reactSys()}` : reactSys() });
+      setSys();
       for (;;) {
         if (signal.aborted) break;
         const limitHit = toolCalls >= MAX_AGENT_STEPS || remaining() < 45_000;
         if (limitHit) msgs.push({ role: "user", content: `Time/tool budget reached. Give the final answer now without any tool JSON.` });
         let text = "";
         try {
-          for await (const ch of adapter.chat({ model: model.modelId, messages: msgs, maxTokens, signal: callSignal(limitHit ? 40_000 : 180_000) })) {
-            if (ch.type === "text") text += ch.text;
-            else if (ch.type === "reasoning") {
-              reasoning += ch.text;
-              emit({ type: "reasoning", text: ch.text });
-            } else if (ch.type === "usage") usage = addUsage(usage, ch);
-          }
+          setSys();
+          text = await callModel(limitHit ? 40_000 : STEP_MS, async (sig) => {
+            let t = "";
+            for await (const ch of adapter.chat({ model: model.modelId, messages: msgs, maxTokens, signal: sig })) {
+              if (ch.type === "text") t += ch.text;
+              else if (ch.type === "reasoning") {
+                reasoning += ch.text;
+                emit({ type: "reasoning", text: ch.text });
+              } else if (ch.type === "usage") usage = addUsage(usage, ch);
+            }
+            return t;
+          });
         } catch (e) {
           if (signal.aborted || !toolCalls) throw e;
-          finalText = timeoutAnswer(steps);
+          finalText = timeoutAnswer(steps, (e as Error).message?.slice(0, 160));
           break;
         }
         const action = limitHit ? null : parseAction(text);

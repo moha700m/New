@@ -383,13 +383,26 @@ export async function serverHeaders(s: ServerRow, forceRefresh = false): Promise
   return h;
 }
 
+/** True when an MCP error means the stored credentials are no longer accepted. */
+export function isAuthError(e: unknown) {
+  return /HTTP 401|invalid[_ ]token|Invalid authorization/i.test((e as Error)?.message ?? "");
+}
+
+/** Marks a connector as needing a fresh «ربط» (the UI shows the button again and the agent stops using it). */
+export async function markNeedsReconnect(id: string, name: string, reason: string) {
+  await prisma.mcpServer
+    .update({ where: { id }, data: { connectedAt: null, tools: [], lastError: `انتهى الربط — اضغط «ربط» مرة ثانية (${reason.slice(0, 200)})`.slice(0, 500) } })
+    .catch(() => {});
+  console.log(`[connect] mcp needs-reconnect ${name}: ${reason.slice(0, 200)}`);
+}
+
 /** Connects (refreshing an OAuth token once on 401). */
 export async function connectServer(s: ServerRow, signal?: AbortSignal, timeoutMs = 90_000) {
   let c = new McpClient({ url: s.url, transport: s.transport, headers: await serverHeaders(s), signal, timeoutMs });
   try {
     await c.connect();
   } catch (e) {
-    if (s.authType !== "oauth" || !/HTTP 401/.test((e as Error).message)) throw e;
+    if (s.authType !== "oauth" || !isAuthError(e)) throw e;
     c = new McpClient({ url: s.url, transport: s.transport, headers: await serverHeaders(s, true), signal, timeoutMs });
     await c.connect();
   }
@@ -541,44 +554,68 @@ function githubRestTools(): AgentTool[] {
   ];
 }
 
-/** Builds agent tools for every enabled MCP server (from the cached tool list; refreshes servers that have none). */
-export async function loadMcpTools(signal: AbortSignal): Promise<{ tools: AgentTool[]; close: () => Promise<void>; errors: string[] }> {
-  const servers = await prisma.mcpServer.findMany({ where: { enabled: true }, orderBy: { createdAt: "asc" } });
-  const clients = new Map<string, McpClient>();
+export type ToolGroup = { slug: string; name: string; core: boolean; tools: AgentTool[] };
+
+/**
+ * Builds agent tools for every connected MCP server, grouped per connector. Servers are prepared in parallel and
+ * each one gets ~8 s: a slow, broken or expired connector is skipped (and flagged for «ربط» on 401) instead of
+ * blocking the run. Built-in tools never depend on this.
+ */
+export async function loadMcpTools(signal: AbortSignal): Promise<{ groups: ToolGroup[]; tools: AgentTool[]; close: () => Promise<void>; errors: string[]; reconnect: string[] }> {
+  const servers = await prisma.mcpServer.findMany({ where: { enabled: true }, orderBy: { createdAt: "asc" } }).catch(() => [] as ServerRow[]);
+  const clients = new Map<string, Promise<McpClient>>();
   const errors: string[] = [];
-  const tools: AgentTool[] = [];
+  const reconnect: string[] = [];
   const used = new Set(BUILTIN_TOOLS.map((t) => t.name));
 
-  async function client(s: ServerRow) {
+  function client(s: ServerRow) {
     let c = clients.get(s.id);
     if (!c) {
-      c = await connectServer(s, signal);
+      c = connectServer(s, signal, 90_000);
+      c.catch(() => clients.delete(s.id));
       clients.set(s.id, c);
     }
     return c;
   }
 
-  for (const s of servers) {
-    if ((s.authType === "oauth" || s.authType === "github") && !s.connectedAt) continue; // not connected yet
+  const LOAD_MS = 8_000;
+  const prepared = await Promise.all(
+    servers.map(async (s): Promise<{ s: ServerRow; list: McpToolInfo[] } | null> => {
+      if ((s.authType === "oauth" || s.authType === "github") && !s.connectedAt) return null; // not connected
+      if (s.authType === "github") return { s, list: [] };
+      let list = (Array.isArray(s.tools) ? s.tools : []) as unknown as McpToolInfo[];
+      if (list.length) return { s, list };
+      try {
+        const c = await Promise.race([client(s), new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), LOAD_MS))]);
+        list = await Promise.race([c.listTools(), new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), LOAD_MS))]);
+        await prisma.mcpServer.update({ where: { id: s.id }, data: { tools: list as any, lastSyncAt: new Date(), lastError: null } }).catch(() => {});
+        return { s, list };
+      } catch (e) {
+        const msg = (e as Error).message || String(e);
+        if (isAuthError(e)) {
+          reconnect.push(s.name);
+          await markNeedsReconnect(s.id, s.name, msg);
+        } else {
+          errors.push(s.name);
+          await prisma.mcpServer.update({ where: { id: s.id }, data: { lastError: msg.slice(0, 500) } }).catch(() => {});
+        }
+        return null;
+      }
+    }),
+  );
+
+  const groups: ToolGroup[] = [];
+  for (const p of prepared) {
+    if (!p) continue;
+    const { s, list } = p;
     if (s.authType === "github") {
       // GitHub uses our REST toolset (reliable with GitHub App user tokens, includes multi-file commits & Pages deploy)
-      tools.push(...githubRestTools().filter((t) => !used.has(t.name)));
+      const gh = githubRestTools().filter((t) => !used.has(t.name));
+      gh.forEach((t) => used.add(t.name));
+      groups.push({ slug: s.slug, name: s.name, core: true, tools: gh });
       continue;
     }
-    let list = (Array.isArray(s.tools) ? s.tools : []) as unknown as McpToolInfo[];
-    if (!list.length) {
-      try {
-        list = await (await client(s)).listTools();
-        await prisma.mcpServer.update({ where: { id: s.id }, data: { tools: list as any, lastSyncAt: new Date(), lastError: null } });
-      } catch (e) {
-        if (s.authType === "github") {
-          tools.push(...githubRestTools().filter((t) => !used.has(t.name)));
-          continue;
-        }
-        errors.push(`${s.name}: ${(e as Error).message}`);
-        continue;
-      }
-    }
+    const tools: AgentTool[] = [];
     for (const t of filterTools(list, s.toolFilter)) {
       let name = sanitize(`${s.slug}__${t.name}`).slice(0, 64);
       for (let k = 2; used.has(name); k++) name = `${name.slice(0, 60)}_${k}`;
@@ -589,8 +626,17 @@ export async function loadMcpTools(signal: AbortSignal): Promise<{ tools: AgentT
         description: `[MCP: ${s.name}] ${(t.description ?? "").slice(0, 900)}`,
         parameters: t.inputSchema && typeof t.inputSchema === "object" ? (t.inputSchema as Record<string, unknown>) : { type: "object", properties: {} },
         async run(args, ctx) {
-          const c = await client(s);
-          const r = await c.callTool(t.name, args);
+          let r;
+          try {
+            const c = await client(s);
+            r = await c.callTool(t.name, args);
+          } catch (e) {
+            if (isAuthError(e)) {
+              await markNeedsReconnect(s.id, s.name, (e as Error).message);
+              throw new Error(`${s.name}: الربط انتهى — المستخدم لازم يضغط «ربط» مرة ثانية من الموصّلات. كمّل المهمة بأدوات ثانية.`);
+            }
+            throw e;
+          }
           for (const img of r.images.slice(0, 2)) {
             const buf = Buffer.from(img.base64, "base64");
             const att = await prisma.attachment.create({ data: { userId: ctx.userId, messageId: ctx.assistantMessageId, filename: `mcp-${Date.now()}.${img.mimeType.split("/")[1]}`, mimeType: img.mimeType, size: buf.length, kind: "generated-image", data: buf } });
@@ -601,12 +647,15 @@ export async function loadMcpTools(signal: AbortSignal): Promise<{ tools: AgentT
         },
       });
     }
+    if (tools.length) groups.push({ slug: s.slug, name: s.name, core: false, tools });
   }
   return {
-    tools,
+    groups,
+    tools: groups.flatMap((g) => g.tools),
     errors,
+    reconnect,
     close: async () => {
-      await Promise.all([...clients.values()].map((c) => c.close().catch(() => {})));
+      await Promise.all([...clients.values()].map((c) => c.then((x) => x.close()).catch(() => {})));
     },
   };
 }
