@@ -29,9 +29,23 @@ function Attachments({ list }: { list: UiAttachment[] }) {
   return (
     <div className="mb-2 flex flex-wrap gap-2">
       {list.map((a) =>
-        a.kind === "image" || a.kind === "generated-image" ? (
+        a.kind === "generated-image" ? (
+          <figure key={a.id} className="w-full max-w-[520px]">
+            <a href={`/api/attachments/${a.id}`} target="_blank" rel="noreferrer">
+              <img src={a.previewUrl ?? `/api/attachments/${a.id}`} alt={a.filename} className="h-auto w-full rounded-xl border border-ink-600" loading="lazy" />
+            </a>
+            <figcaption className="mt-1.5 flex gap-2 text-xs">
+              <a href={`/api/attachments/${a.id}?download=1`} download={a.filename} className="btn-outline px-2.5 py-1">
+                تحميل الصورة
+              </a>
+              <a href={`/api/attachments/${a.id}`} target="_blank" rel="noreferrer" className="btn-ghost px-2.5 py-1 text-slate-400">
+                فتح بالحجم الكامل
+              </a>
+            </figcaption>
+          </figure>
+        ) : a.kind === "image" ? (
           <a key={a.id} href={`/api/attachments/${a.id}`} target="_blank" rel="noreferrer">
-            <img src={a.previewUrl ?? `/api/attachments/${a.id}`} alt={a.filename} className={`rounded-xl border border-ink-600 object-cover ${a.kind === "generated-image" ? "max-h-[420px] max-w-full" : "h-28 w-28"}`} />
+            <img src={a.previewUrl ?? `/api/attachments/${a.id}`} alt={a.filename} className="h-28 w-28 rounded-xl border border-ink-600 object-cover" />
           </a>
         ) : (
           <a key={a.id} href={`/api/attachments/${a.id}`} className="flex items-center gap-2 rounded-lg border border-ink-600 bg-ink-800 px-2.5 py-1.5 text-xs hover:bg-ink-700">

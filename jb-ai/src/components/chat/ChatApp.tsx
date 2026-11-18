@@ -8,7 +8,7 @@ import { useToast } from "../ui/Toast";
 import { useLiveConfig } from "../useLiveConfig";
 import { Composer, type PendingAttachment } from "./Composer";
 import { MessageView, type UiMessage } from "./MessageView";
-import { isUncensoredModel, ModelSelector } from "./ModelSelector";
+import { isFreeModel, isRegularModel, isUncensoredModel, ModelSelector } from "./ModelSelector";
 import { Sidebar, type ConvItem, type MeInfo } from "./Sidebar";
 
 const MODEL_KEY = "jb.selectedModel";
@@ -268,6 +268,17 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
     window.location.href = "/";
   }
 
+  const lastTextModel = useRef<string | null>(null);
+  const imageDefault = config?.defaults.image ?? models.find((m) => m.capabilities.imageGeneration)?.id ?? null;
+  function toggleImageMode() {
+    if (current?.capabilities.imageGeneration) {
+      chooseModel(lastTextModel.current && models.some((m) => m.id === lastTextModel.current) ? lastTextModel.current : (defaultId ?? ""));
+    } else if (imageDefault) {
+      lastTextModel.current = current?.id ?? null;
+      chooseModel(imageDefault);
+    }
+  }
+
   function chooseModel(id: string) {
     setSelectedModel(id);
     try {
@@ -293,7 +304,9 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
       searchLocked={searchLocked}
       uploadsAllowed={me?.plan?.allowUploads ?? false}
       onRequireAuth={signedIn ? undefined : requireAuth}
-      placeholder={current?.capabilities.imageGeneration ? "صِف الصورة التي تريد إنشاءها" : "اسأل أي شيء"}
+      placeholder={current?.capabilities.imageGeneration ? `صِف الصورة التي تريد إنشاءها (${current.name})` : "اسأل أي شيء"}
+      imageMode={Boolean(current?.capabilities.imageGeneration)}
+      onToggleImage={signedIn && (imageDefault || current?.capabilities.imageGeneration) ? toggleImageMode : undefined}
       autoFocus
       disabled={config?.site.maintenanceMode}
     />
@@ -320,10 +333,13 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
           <button className="btn-ghost p-2 md:hidden" onClick={() => setSidebarOpen(true)} aria-label="فتح القائمة">
             <Menu size={20} />
           </button>
-          <div className="flex min-w-0 items-center gap-1.5">
-            <ModelSelector models={models.filter((m) => !isUncensoredModel(m))} value={selectedModel} onChange={chooseModel} defaultId={defaultId} signedIn={signedIn} />
+          <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] sm:overflow-visible">
+            <ModelSelector models={models.filter(isRegularModel)} value={selectedModel} onChange={chooseModel} defaultId={defaultId} signedIn={signedIn} />
             {models.some(isUncensoredModel) && (
               <ModelSelector variant="uncensored" models={models.filter(isUncensoredModel)} value={selectedModel} onChange={chooseModel} defaultId={defaultId} signedIn={signedIn} />
+            )}
+            {models.some(isFreeModel) && (
+              <ModelSelector variant="free" models={models.filter(isFreeModel)} value={selectedModel} onChange={chooseModel} defaultId={defaultId} signedIn={signedIn} />
             )}
           </div>
           <span className="hidden items-center gap-1 text-[11px] text-slate-500 sm:flex" title={connected ? "متصل بالتحديثات المباشرة" : "جارٍ إعادة الاتصال بالتحديثات المباشرة"}>

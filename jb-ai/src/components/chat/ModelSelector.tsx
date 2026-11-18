@@ -1,11 +1,19 @@
 "use client";
-import { Brain, Check, ChevronDown, Code2, Eye, Flame, Globe, ImageIcon, Lock, Sparkles } from "lucide-react";
+import { Brain, Check, ChevronDown, Code2, Eye, Flame, Gift, Globe, ImageIcon, Lock, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { LiveModel } from "../useLiveConfig";
 
 /** Uncensored models live in their own picker («بدون فلترة»), separate from the regular list. */
-export const isUncensoredModel = (m: LiveModel) => Boolean(m.capabilities.uncensored);
+export const isFreeModel = (m: LiveModel) => Boolean(m.capabilities.free);
+export const isUncensoredModel = (m: LiveModel) => !isFreeModel(m) && Boolean(m.capabilities.uncensored);
+export const isRegularModel = (m: LiveModel) => !isFreeModel(m) && !isUncensoredModel(m);
+
+const VARIANTS = {
+  standard: { label: "النماذج", icon: Sparkles, iconCls: "text-brand-400", on: "border-brand-500/40 bg-ink-700/60 text-slate-100", off: "border-transparent text-slate-300 hover:bg-ink-700", panel: "border-ink-600", check: "text-brand-400", banner: null as null | { cls: string; text: string } },
+  uncensored: { label: "بدون فلترة", icon: Flame, iconCls: "text-rose-400", on: "border-rose-500/60 bg-rose-500/15 text-rose-200", off: "border-rose-500/30 text-rose-300 hover:bg-rose-500/10", panel: "border-rose-500/40", check: "text-rose-400", banner: { cls: "border-rose-500/20 bg-rose-500/10 text-rose-200", text: "نماذج بدون فلترة — ترد بدون قيود المحتوى المعتادة" } },
+  free: { label: "مجانية", icon: Gift, iconCls: "text-emerald-400", on: "border-emerald-500/60 bg-emerald-500/15 text-emerald-200", off: "border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10", panel: "border-emerald-500/40", check: "text-emerald-400", banner: { cls: "border-emerald-500/20 bg-emerald-500/10 text-emerald-200", text: "نماذج مجانية — ما تخصم من رصيد Venice" } },
+};
 
 const GROUPS: { key: LiveModel["category"]; label: string }[] = [
   { key: "TEXT", label: "عام" },
@@ -41,12 +49,14 @@ export function ModelSelector({
   onChange: (id: string) => void;
   defaultId: string | null;
   signedIn: boolean;
-  variant?: "standard" | "uncensored";
+  variant?: "standard" | "uncensored" | "free";
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const ref = useRef<HTMLDivElement>(null);
-  const uncensored = variant === "uncensored";
+  const v = VARIANTS[variant];
+  const Icon = v.icon;
+  const special = variant !== "standard";
   // `models` is already the list for this picker; the active model shows here only when it belongs to it.
   const active = value ?? defaultId;
   const current = models.find((m) => m.id === active);
@@ -65,23 +75,19 @@ export function ModelSelector({
   return (
     <div className="relative" ref={ref}>
       <button
-        className={
-          uncensored
-            ? `flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm font-medium sm:max-w-sm ${current ? "border-rose-500/60 bg-rose-500/15 text-rose-200" : "border-rose-500/30 text-rose-300 hover:bg-rose-500/10"}`
-            : `flex max-w-[150px] items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm font-medium sm:max-w-xs ${current ? "border-brand-500/40 bg-ink-700/60 text-slate-100" : "border-transparent text-slate-300 hover:bg-ink-700"}`
-        }
+        className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm font-medium ${special ? "shrink-0 sm:max-w-sm" : "max-w-[150px] sm:max-w-xs"} ${current ? v.on : v.off}`}
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        data-testid={uncensored ? "uncensored-selector" : "model-selector"}
+        data-testid={variant === "standard" ? "model-selector" : `${variant}-selector`}
       >
-        {uncensored ? <Flame size={15} className="shrink-0 text-rose-400" /> : <Sparkles size={15} className="shrink-0 text-brand-400" />}
+        <Icon size={15} className={`shrink-0 ${v.iconCls}`} />
         <span className="truncate">
-          {uncensored ? (
+          {special ? (
             <>
-              بدون فلترة
+              {v.label}
               {current && (
-                <span className="hidden font-normal text-rose-200/80 sm:inline">
+                <span className="hidden font-normal opacity-80 sm:inline">
                   {" · "}
                   <bdi>{current.name}</bdi>
                 </span>
@@ -95,20 +101,22 @@ export function ModelSelector({
             "لا توجد نماذج متاحة"
           )}
         </span>
-        <ChevronDown size={15} className={`shrink-0 ${uncensored ? "text-rose-400/80" : "text-slate-400"}`} />
+        <ChevronDown size={15} className="shrink-0 opacity-70" />
       </button>
       {open && (
         <div
-          className={`fixed inset-x-2 top-14 z-40 overflow-hidden rounded-xl border bg-ink-900 shadow-2xl sm:absolute sm:inset-x-auto sm:start-0 sm:top-full sm:mt-1 sm:w-[380px] ${uncensored ? "border-rose-500/40" : "border-ink-600"}`}
+          className={`fixed inset-x-2 top-14 z-40 overflow-hidden rounded-xl border bg-ink-900 shadow-2xl sm:absolute sm:inset-x-auto sm:start-0 sm:top-full sm:mt-1 sm:w-[380px] ${v.panel}`}
         >
-          {uncensored && (
-            <div className="flex items-center gap-2 border-b border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
-              <Flame size={14} className="shrink-0" />
-              <span>نماذج بدون فلترة — ترد بدون قيود المحتوى المعتادة ({models.length} نموذج)</span>
+          {v.banner && (
+            <div className={`flex items-center gap-2 border-b px-3 py-2 text-xs ${v.banner.cls}`}>
+              <Icon size={14} className="shrink-0" />
+              <span>
+                {v.banner.text} ({models.length} نموذج)
+              </span>
             </div>
           )}
           <div className="border-b border-ink-700 p-2">
-            <input className="input py-1.5" placeholder={uncensored ? "ابحث في النماذج بدون فلترة…" : "ابحث في النماذج…"} value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
+            <input className="input py-1.5" placeholder={special ? `ابحث في «${v.label}»…` : "ابحث في النماذج…"} value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
           </div>
           <div className="max-h-[60vh] overflow-y-auto p-1.5" role="listbox">
             {!filtered.length && <p className="p-3 text-sm text-slate-400">لا توجد نماذج مطابقة.</p>}
@@ -146,7 +154,7 @@ export function ModelSelector({
                             <Lock size={10} /> ترقية
                           </Link>
                         ) : m.id === current?.id ? (
-                          <Check size={16} className={`mt-0.5 ${uncensored ? "text-rose-400" : "text-brand-400"}`} />
+                          <Check size={16} className={`mt-0.5 ${v.check}`} />
                         ) : null}
                       </button>
                     );

@@ -61,7 +61,14 @@ export class OpenAICompatibleAdapter implements ProviderAdapter {
   async listModels(): Promise<DiscoveredModel[]> {
     const res = await providerFetch(this.cfg, joinUrl(this.cfg.baseUrl, "/models"), { headers: this.headers(false), timeoutMs: 30000 });
     const body = (await res.json()) as { data?: Array<Record<string, unknown>> };
-    const list = Array.isArray(body.data) ? body.data : [];
+    let list = Array.isArray(body.data) ? body.data : [];
+    // OpenRouter: only offer the free (":free" / zero-priced) models.
+    if (/openrouter\.ai/i.test(this.cfg.baseUrl)) {
+      list = list.filter((m) => {
+        const pr = (m.pricing ?? {}) as Record<string, unknown>;
+        return String(m.id).endsWith(":free") || (Number(pr.prompt) === 0 && Number(pr.completion) === 0);
+      });
+    }
     return list
       .filter((m) => typeof m.id === "string")
       .map((m) => {

@@ -70,6 +70,11 @@ async function main() {
     console.warn("Venice catalog sync skipped:", (e as Error).message);
   }
   try {
+    await ensureFreeProviders();
+  } catch (e) {
+    console.warn("Free providers setup skipped:", (e as Error).message);
+  }
+  try {
     await privateModeHousekeeping();
   } catch (e) {
     console.warn("Private-mode housekeeping skipped:", (e as Error).message);
@@ -210,6 +215,72 @@ async function syncVeniceCatalog(providerId: string, baseUrl: string) {
   if (!bootstrapped) await prisma.setting.create({ data: { key: BOOTSTRAP, value: { at: new Date().toISOString() } } });
   await prisma.configState.update({ where: { id: "global" }, data: { version: { increment: 1 } } });
   console.log(`Venice catalog synced: ${discovered.length} models (${created} new)${bootstrapped ? "" : ", all enabled for every plan"}.`);
+}
+
+/* ------------------------------------------------------------------ Free providers
+ * Pollinations works with no key, so its models are synced on every deploy.
+ * OpenRouter / Groq / Gemini are created as empty slots: paste a key in Admin → AI Providers, then "Sync models";
+ * their (free) models then show up in the «مجانية» list. */
+async function ensureFreeProviders() {
+  const slots = [
+    { slug: "pollinations", name: "Pollinations (مجاني بدون مفتاح)", baseUrl: "https://text.pollinations.ai/openai", priority: 50 },
+    { slug: "openrouter", name: "OpenRouter (النماذج المجانية — يحتاج مفتاح)", baseUrl: "https://openrouter.ai/api/v1", priority: 60 },
+    { slug: "groq", name: "Groq (مجاني — يحتاج مفتاح)", baseUrl: "https://api.groq.com/openai/v1", priority: 70 },
+    { slug: "gemini", name: "Google Gemini (مجاني — يحتاج مفتاح)", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai", priority: 80 },
+  ];
+  for (const p of slots) {
+    await prisma.provider.upsert({ where: { slug: p.slug }, create: { ...p, type: "OPENAI_COMPATIBLE" }, update: {} });
+  }
+  const poll = await prisma.provider.findUniqueOrThrow({ where: { slug: "pollinations" } });
+  const get = async (url: string) => {
+    const r = await fetch(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(20000) });
+    if (!r.ok) throw new Error(`GET ${url} -> ${r.status}`);
+    return r.json() as Promise<any[]>;
+  };
+  const [text, image] = await Promise.all([get("https://text.pollinations.ai/models"), get("https://image.pollinations.ai/models")]);
+  const base = { supportsWebSearch: false, supportsStructuredOutput: false, supportsCode: false, inCatalog: true, offline: false };
+  const discovered = [
+    ...text.map((m: any, i: number) => {
+      const id = typeof m === "string" ? m : m?.name;
+      return {
+        modelId: id as string,
+        displayName: `Pollinations ${id}`,
+        description: (m?.description ? `${m.description} — ` : "") + "مجاني بدون مفتاح (Pollinations)",
+        category: (m?.reasoning ? "REASONING" : m?.vision ? "VISION" : "TEXT") as "REASONING" | "VISION" | "TEXT",
+        sortOrder: 2000 + i,
+        caps: { ...base, supportsText: true, supportsStreaming: true, supportsVision: Boolean(m?.vision), supportsTools: Boolean(m?.tools), supportsReasoning: Boolean(m?.reasoning), supportsImageGeneration: false, inputPricePerM: 0, outputPricePerM: 0, extraCapabilities: { free: true }, rawMetadata: m },
+      };
+    }),
+    ...image.map((m: any, i: number) => {
+      const id = typeof m === "string" ? m : m?.name;
+      return {
+        modelId: `image:${id}`,
+        displayName: `Pollinations ${id} (صور)`,
+        description: "توليد صور مجاني بدون مفتاح (Pollinations)",
+        category: "IMAGE" as const,
+        sortOrder: 2100 + i,
+        caps: { ...base, supportsText: false, supportsStreaming: false, supportsVision: false, supportsTools: false, supportsReasoning: false, supportsImageGeneration: true, extraCapabilities: { free: true, pricePerImageUsd: 0 }, rawMetadata: typeof m === "string" ? { name: m } : m },
+      };
+    }),
+  ].filter((d) => d.modelId && !d.modelId.endsWith("undefined"));
+  const plans = await prisma.plan.findMany({ select: { id: true } });
+  const existing = await prisma.aiModel.findMany({ where: { providerId: poll.id } });
+  const byId = new Map(existing.map((m) => [m.modelId, m]));
+  for (const d of discovered) {
+    const prev = byId.get(d.modelId);
+    if (prev) {
+      await prisma.aiModel.update({ where: { id: prev.id }, data: d.caps });
+    } else {
+      const row = await prisma.aiModel.create({ data: { providerId: poll.id, modelId: d.modelId, displayName: d.displayName, description: d.description, category: d.category, source: "SYNCED", enabled: true, sortOrder: d.sortOrder, ...d.caps } });
+      await prisma.planModel.createMany({ data: plans.map((p) => ({ planId: p.id, modelId: row.id })), skipDuplicates: true });
+    }
+  }
+  const seen = new Set(discovered.map((d) => d.modelId));
+  const gone = existing.filter((m) => m.source === "SYNCED" && !seen.has(m.modelId));
+  if (gone.length) await prisma.aiModel.updateMany({ where: { id: { in: gone.map((m) => m.id) } }, data: { inCatalog: false } });
+  await prisma.provider.update({ where: { id: poll.id }, data: { lastSyncAt: new Date(), lastSyncStatus: "ok", lastSyncError: null, lastSyncCount: discovered.length } });
+  await prisma.configState.update({ where: { id: "global" }, data: { version: { increment: 1 } } });
+  console.log(`Pollinations synced: ${discovered.map((d) => d.modelId).join(", ")}`);
 }
 
 /* Private mode: make sure the owner account has the OWNER role, block the automated test accounts,

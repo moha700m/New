@@ -9,7 +9,7 @@ export interface LiveModel {
   category: "TEXT" | "REASONING" | "CODE" | "VISION" | "IMAGE";
   provider: string;
   contextLength: number | null;
-  capabilities: { vision: boolean; webSearch: boolean; reasoning: boolean; tools: boolean; imageGeneration: boolean; code: boolean; streaming: boolean; structuredOutput: boolean; uncensored?: boolean };
+  capabilities: { vision: boolean; webSearch: boolean; reasoning: boolean; tools: boolean; imageGeneration: boolean; code: boolean; streaming: boolean; structuredOutput: boolean; uncensored?: boolean; free?: boolean };
   plans: string[];
   allowed: boolean;
 }

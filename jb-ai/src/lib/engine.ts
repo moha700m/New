@@ -124,7 +124,7 @@ export interface PublicModel {
   category: ModelCategory;
   provider: string;
   contextLength: number | null;
-  capabilities: { vision: boolean; webSearch: boolean; reasoning: boolean; tools: boolean; imageGeneration: boolean; code: boolean; streaming: boolean; structuredOutput: boolean; uncensored: boolean };
+  capabilities: { vision: boolean; webSearch: boolean; reasoning: boolean; tools: boolean; imageGeneration: boolean; code: boolean; streaming: boolean; structuredOutput: boolean; uncensored: boolean; free: boolean };
   plans: string[]; // plan keys that may use it
 }
 
@@ -145,6 +145,13 @@ registerInvalidator(() => {
 /** A model is usable when it and its provider are enabled, it's still offered by the provider, and it isn't marked offline. */
 export function isUsable(m: AiModel & { provider: Provider }) {
   return m.enabled && m.provider.enabled && (m.inCatalog || m.source === "MANUAL") && !m.offline;
+}
+
+/** Providers whose models cost nothing (Pollinations needs no key; the others use their free tiers once a key is added). */
+const FREE_PROVIDER_SLUGS = new Set(["pollinations", "openrouter", "groq", "gemini"]);
+function isFreeModel(m: AiModel & { provider: Provider }) {
+  const extra = (m.extraCapabilities ?? {}) as { free?: boolean };
+  return Boolean(extra.free) || FREE_PROVIDER_SLUGS.has(m.provider.slug) || (m.inputPricePerM === 0 && m.outputPricePerM === 0);
 }
 
 function isUncensored(m: AiModel) {
@@ -191,6 +198,7 @@ export async function getPublicCatalog(): Promise<PublicCatalog> {
         streaming: m.supportsStreaming,
         structuredOutput: m.supportsStructuredOutput,
         uncensored: isUncensored(m),
+        free: isFreeModel(m),
       },
       plans: planKeysFor(m),
     })),

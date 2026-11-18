@@ -1,4 +1,5 @@
 import "server-only";
+import { MINOR_SAFETY_MESSAGE, violatesMinorSafety } from "./safety";
 import type { AiModel, Attachment, Plan, Provider } from "@prisma/client";
 import { prisma } from "./db";
 import { getPublicCatalog, resolveRoute, type RouteRole, type RouteTarget } from "./engine";
@@ -61,6 +62,9 @@ export async function prepareChat(userId: string, plan: Plan, input: ChatInput, 
     attachments = await prisma.attachment.findMany({ where: { id: { in: input.attachmentIds }, userId, messageId: null } });
     if (attachments.length !== input.attachmentIds.length) throw new HttpError(400, "مرفق واحد أو أكثر غير صالح");
   }
+
+  // ----- the one hard content rule (legal): no sexual content involving minors, for chat and images alike
+  if (violatesMinorSafety(input.content)) throw new HttpError(400, MINOR_SAFETY_MESSAGE, "blocked_minor_safety");
 
   // ----- decide routing role and requested model
   const catalog = await getPublicCatalog();

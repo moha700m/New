@@ -4,6 +4,7 @@ import { decryptSecret } from "../crypto";
 import { AnthropicAdapter } from "./anthropic";
 import { OpenAICompatibleAdapter } from "./openai-compatible";
 import type { ProviderAdapter, ProviderRuntimeConfig } from "./types";
+import { isPollinations, PollinationsAdapter } from "./pollinations";
 import { VeniceAdapter } from "./venice";
 
 export * from "./types";
@@ -41,6 +42,6 @@ export function getAdapter(p: Provider): ProviderAdapter {
     case "ANTHROPIC":
       return new AnthropicAdapter(cfg);
     default:
-      return new OpenAICompatibleAdapter(cfg);
+      return isPollinations(p) ? new PollinationsAdapter(cfg) : new OpenAICompatibleAdapter(cfg);
   }
 }

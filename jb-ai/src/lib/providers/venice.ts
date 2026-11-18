@@ -108,7 +108,7 @@ export class VeniceAdapter extends OpenAICompatibleAdapter {
     const res = await providerFetch(this.cfg, joinUrl(this.cfg.baseUrl, "/image/generate"), {
       method: "POST",
       headers: this.headers(),
-      body: JSON.stringify({ model: req.model, prompt: req.prompt.slice(0, 1500), width: req.width ?? 1024, height: req.height ?? 1024, format: "webp", return_binary: false, safe_mode: false }),
+      body: JSON.stringify({ model: req.model, prompt: req.prompt.slice(0, 1500), width: req.width ?? 1024, height: req.height ?? 1024, format: "webp", return_binary: false, safe_mode: false, hide_watermark: true }),
       signal: req.signal,
     });
     const body = (await res.json()) as { images?: string[] };

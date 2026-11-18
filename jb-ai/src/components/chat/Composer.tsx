@@ -1,5 +1,5 @@
 "use client";
-import { ArrowUp, FileText, Globe, Lightbulb, Loader2, Plus, Square, X } from "lucide-react";
+import { ArrowUp, FileText, Globe, ImageIcon, Lightbulb, Loader2, Plus, Square, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useToast } from "../ui/Toast";
 
@@ -27,6 +27,8 @@ export function Composer(props: {
   uploadsAllowed: boolean;
   onRequireAuth?: () => void;
   autoFocus?: boolean;
+  imageMode?: boolean;
+  onToggleImage?: () => void;
 }) {
   const [text, setText] = useState("");
   const [atts, setAtts] = useState<PendingAttachment[]>([]);
@@ -123,6 +125,17 @@ export function Composer(props: {
         <button className="btn-ghost h-9 w-9 p-0" onClick={() => (props.onRequireAuth ? props.onRequireAuth() : fileRef.current?.click())} aria-label="إرفاق ملفات" title="أرفق صورًا أو ملفات نصية">
           {uploading ? <Loader2 size={18} className="animate-spin" /> : <Plus size={19} />}
         </button>
+        {props.onToggleImage && (
+          <button
+            className={`btn h-9 px-2.5 ${props.imageMode ? "bg-fuchsia-500/20 text-fuchsia-300" : "text-slate-300 hover:bg-ink-700"}`}
+            onClick={props.onToggleImage}
+            aria-pressed={props.imageMode}
+            title={props.imageMode ? "رجوع للمحادثة" : "إنشاء صورة"}
+            data-testid="image-mode"
+          >
+            <ImageIcon size={16} /> <span className="hidden sm:inline">صورة</span>
+          </button>
+        )}
         {props.thinkAvailable && (
           <button
             className={`btn h-9 px-2.5 ${props.think ? "bg-brand-500/20 text-brand-400" : "text-slate-300 hover:bg-ink-700"}`}
