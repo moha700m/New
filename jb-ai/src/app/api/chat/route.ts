@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { after } from "next/server";
+import { ChatJob } from "@/lib/chat-jobs";
 import { needsVerification, requireUser } from "@/lib/auth";
 import { executeChat, prepareChat } from "@/lib/gateway";
 import { errorResponse, HttpError, parseBody } from "@/lib/http";
@@ -45,29 +47,38 @@ export async function POST(req: Request) {
     return errorResponse(e);
   }
 
-  const controller = new AbortController();
-  req.signal.addEventListener("abort", () => controller.abort());
+  // The run belongs to the server, not to this connection: it keeps going (after()) if the phone locks or the tab
+  // closes, and every event is stored so the client can resume from GET /api/chat/stream/<messageId>?after=<seq>.
+  const job = new ChatJob();
+  const work = (async () => {
+    try {
+      await executeChat(userId, prep, input, job.emit, job.controller.signal);
+    } catch (e) {
+      console.error("[chat] run failure", e);
+      job.emit({ type: "error", error: "صار خطأ غير متوقع في الخادم أثناء توليد الرد." });
+    } finally {
+      await job.finish();
+    }
+  })();
+  after(() => work);
+
   const encoder = new TextEncoder();
+  let unsubscribe: (() => void) | null = null;
   const stream = new ReadableStream({
-    async start(ctrl) {
-      const emit = (ev: Record<string, unknown>) => {
+    start(ctrl) {
+      unsubscribe = job.subscribe((rows) => {
         try {
-          ctrl.enqueue(encoder.encode(JSON.stringify(ev) + "\n"));
+          if (!rows.length) {
+            unsubscribe?.();
+            ctrl.close();
+            return;
+          }
+          ctrl.enqueue(encoder.encode(rows.map((r) => JSON.stringify({ ...r.data, seq: r.seq })).join("\n") + "\n"));
         } catch {}
-      };
-      try {
-        await executeChat(userId, prep, input, emit, controller.signal);
-      } catch (e) {
-        console.error("[chat] stream failure", e);
-        emit({ type: "error", error: "حدث خطأ غير متوقع في الخادم أثناء توليد الرد." });
-      } finally {
-        try {
-          ctrl.close();
-        } catch {}
-      }
+      });
     },
     cancel() {
-      controller.abort();
+      unsubscribe?.(); // the client went away: the run continues in the background
     },
   });
   return new Response(stream, {

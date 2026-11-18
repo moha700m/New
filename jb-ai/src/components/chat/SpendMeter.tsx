@@ -87,7 +87,7 @@ export function SpendMeter({ refreshKey }: { refreshKey: number }) {
                     <div className="mt-0.5 text-[11px] text-slate-500">حسب متوسط آخر ١٠٠ طلب — النماذج الكبيرة والصور أغلى، و«المجانية» ما تخصم شي</div>
                   </>
                 ) : (
-                  "ما فيه صرف كافي لحساب المتوسط بعد"
+                  "ما فيه صرف كافٍ لحساب المتوسط بعد"
                 )}
               </div>
             </>

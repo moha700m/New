@@ -5,11 +5,11 @@ import { getAdapter, OpenAICompatibleAdapter, ProviderError, type ChatMessageInp
 import { toOpenAIMessages } from "../providers/openai-compatible";
 import { BUILTIN_TOOLS, clip, loadMcpTools, type AgentTool, type ToolGroup } from "./tools";
 
-export const MAX_AGENT_STEPS = 25;
+export const MAX_AGENT_STEPS = 30;
 
 export interface AgentStep {
   id: string;
-  kind: "tool" | "note" | "info";
+  kind: "tool" | "note" | "info" | "plan";
   name?: string;
   label?: string;
   args?: string;
@@ -18,6 +18,7 @@ export interface AgentStep {
   result?: string;
   ms?: number;
   text?: string;
+  items?: { text: string; status: "pending" | "in_progress" | "done" }[];
 }
 
 type Emit = (ev: Record<string, unknown>) => void;
@@ -36,18 +37,21 @@ function argsSummary(args: Record<string, unknown>) {
 function systemPrompt(tools: AgentTool[], mcpErrors: string[], extraConnectors: ToolGroup[] = []) {
   const now = new Date().toISOString().slice(0, 10);
   return [
-    `You are JB AI Agent — an autonomous assistant that completes tasks end-to-end using tools (like Claude Code). Today is ${now}.`,
+    `You are «محمد | التقني» agent — an autonomous assistant that completes tasks end-to-end using tools (like Claude Code). Today is ${now}.`,
     `Work in steps: think briefly, call tools, read their results, fix errors and retry with different inputs, and continue until the task is fully done. You may use up to ${MAX_AGENT_STEPS} tool calls.`,
     "Never invent tool results. Prefer reading before writing (e.g. read a repo file before editing it).",
+    "For any multi-step task, FIRST call update_plan with 3–6 short Arabic steps, then keep it current (mark a step in_progress when you start it and done when finished) — the user watches this checklist live.",
+    "If a tool fails, read the error, fix the cause and retry (different input, another tool, or a fallback route) instead of giving up. Small fixes to a file: edit_file. To change a site published earlier: load_site → edit_file/write_files → publish_site with the same slug.",
     "You are also a senior full-stack web engineer and product designer. When asked to build a site/app:",
     "1) PLAN briefly (pages, sections, content, colors) — fill missing details with smart defaults instead of asking; use the user's real details (names, prices, phone numbers) exactly.",
-    "2) BUILD complete, production-quality files — never placeholders like 'lorem ipsum' or 'add content here'. Defaults: semantic HTML5, mobile-first responsive CSS (flex/grid, clamp() type scale), Arabic content → <html lang=\"ar\" dir=\"rtl\"> with IBM Plex Sans Arabic from Google Fonts, accessible contrast, 44px tap targets, smooth subtle animations, meta viewport + description + Open Graph tags, favicon (inline SVG emoji is fine), fast (no heavy frameworks for static sites; Tailwind CDN allowed). WhatsApp links: https://wa.me/<digits>. Images: generated ones (attachment_id), https://images.unsplash.com/… photos, or CSS/SVG art.",
+    "2) BUILD complete, production-quality files — never placeholders like 'lorem ipsum' or 'add content here'. Defaults: semantic HTML5, mobile-first responsive CSS (flex/grid, clamp() type scale), Arabic content → <html lang=\"ar\" dir=\"rtl\"> with IBM Plex Sans Arabic from Google Fonts, accessible contrast, 44px tap targets, smooth subtle animations, NO horizontal scrolling on a 360px phone (html,body{overflow-x:hidden}, max-width:100% on media, no fixed widths wider than the screen, decorative blobs clipped), meta viewport + description + Open Graph tags, favicon (inline SVG emoji is fine), fast (no heavy frameworks for static sites; Tailwind CDN allowed). WhatsApp links: https://wa.me/<digits>. Images: generated ones (attachment_id), https://images.unsplash.com/… photos, or CSS/SVG art.",
     "   Use write_files to put the project into the workspace (split big projects across calls: index.html, styles.css, app.js…).",
     "3) SHIP — pick the best available route and do it yourself:",
-    "   • Instant public link (always available): publish_site (no args = whole workspace).",
+    "   • Instant public link (always available): publish_site with just {slug, title} — it publishes the workspace files you already wrote. NEVER paste the file contents again into publish_site (it doubles the time); only pass files for generated images ({path, attachment_id}).",
     "   • GitHub (if github__* tools exist): github__create_repo (public) → github__push_files (no files = whole workspace) → github__enable_pages → live at https://<owner>.github.io/<repo>/. Vercel/Netlify/Cloudflare one-tap: github__deploy_links and give those links (the user taps once, signs in, and the repo deploys; future pushes redeploy automatically).",
     "   • Cloudflare / Netlify / Supabase / Neon / Railway connector tools (names start with the connector) — use them directly when the user asks for that platform (e.g. Cloudflare tools can create Workers/Pages; Netlify tools can create sites and deploy).",
-    "4) VERIFY with check_url on every live URL (GitHub Pages can take ~1 minute: retry), fix and redeploy if broken.",
+    "Keep it fast: write the files in 1–3 write_files calls, then publish_site {slug,title} once — don't rewrite or republish without a reason.",
+    "4) VERIFY with check_url on the EXACT url the deploy tool returned (never guess or invent other domains), on every live URL, with expect_text = a distinctive real string from the page (e.g. the business name). GitHub Pages can take ~1 minute: retry. If broken or the text is missing, fix and redeploy.",
     "5) REPORT in short Saudi Arabic: what was built, the live link(s) first, and what the user can ask next.",
     "Be efficient: about 4 minutes in total per task — few, large tool calls; at most 2 generated images (1024x1024) and only when really useful.",
     `Available tools: ${tools.map((t) => t.name).join(", ") || "(none)"}.`,
@@ -157,6 +161,31 @@ export async function runAgent(opts: {
     Object.assign(step, patch);
     emit({ type: "agent_step", step });
   };
+  /** Live status line for the UI: what the agent is doing right now. */
+  const setPhase = (phase: string, label: string, detail?: string | null) => emit({ type: "agent_status", phase, label, detail: detail ?? null, elapsedMs: Date.now() - startedAt });
+  const PHASES: Record<string, [string, string]> = {
+    update_plan: ["plan", "يرتّب الخطة"],
+    web_search: ["research", "يبحث في الإنترنت"],
+    web_fetch: ["research", "يقرأ صفحة"],
+    generate_image: ["design", "يصمّم صورة"],
+    write_files: ["build", "يكتب الملفات"],
+    edit_file: ["build", "يعدّل الملفات"],
+    read_files: ["build", "يراجع الملفات"],
+    load_site: ["build", "يفتح الموقع المنشور"],
+    publish_site: ["deploy", "ينشر الموقع"],
+    check_url: ["verify", "يتحقق من الرابط"],
+    use_connector: ["tools", "يجهّز أدوات الموصّل"],
+  };
+  const phaseOf = (name: string, label?: string): [string, string] =>
+    PHASES[name] ??
+    (/^github__(create_repo|push_files|enable_pages|deploy_links|merge)/.test(name)
+      ? ["deploy", "ينشر على GitHub"]
+      : /search/i.test(name)
+        ? ["research", `يبحث${label ? ` · ${label.split(" · ")[0]}` : ""}`]
+        : /fetch|crawl|scrape|read/i.test(name)
+          ? ["research", `يقرأ صفحة${label ? ` · ${label.split(" · ")[0]}` : ""}`]
+          : ["tools", `يستخدم ${label ?? name}`]);
+  setPhase("start", "يجهّز الأدوات");
 
   // Built-in tools are always available; connectors load in parallel with a short per-server timeout and never block.
   const mcp = await loadMcpTools(signal).catch((e) => {
@@ -179,7 +208,7 @@ export async function runAgent(opts: {
   };
   const mentioned = (g: ToolGroup) => [g.slug, g.name.toLowerCase(), ...(ALIASES[g.slug] ?? [])].some((k) => k && lastUser.includes(k));
   const MAX_ACTIVE = 70;
-  const active = new Set<string>([...BUILTIN_TOOLS.map((t) => t.name)]);
+  const active = new Set<string>(["update_plan", ...BUILTIN_TOOLS.map((t) => t.name)]);
   const activate = (g: ToolGroup, filter?: string) => {
     const words = (filter ?? "").toLowerCase().split(/[\s,]+/).filter(Boolean);
     const pick = words.length ? g.tools.filter((t) => words.some((w) => `${t.name} ${t.description}`.toLowerCase().includes(w))) : g.tools;
@@ -210,7 +239,36 @@ export async function runAgent(opts: {
       return { text, summary: `${chosen.length} أداة من ${g.name}` };
     },
   };
-  const allTools = [...BUILTIN_TOOLS, ...mcp.tools, ...(groups.some((g) => !g.core) ? [useConnector] : [])];
+  let planStep: AgentStep | null = null;
+  const updatePlan: AgentTool = {
+    name: "update_plan",
+    label: "الخطة",
+    description: "Create or update the visible task checklist. Pass the FULL list each time: items = [{text (short Arabic), status: pending|in_progress|done}]. Call it first for multi-step tasks and whenever a step starts/finishes.",
+    parameters: {
+      type: "object",
+      properties: { items: { type: "array", items: { type: "object", properties: { text: { type: "string" }, status: { type: "string", enum: ["pending", "in_progress", "done"] } }, required: ["text", "status"] } } },
+      required: ["items"],
+    },
+    async run(args) {
+      let raw: unknown = args.items;
+      if (typeof raw === "string") {
+        try {
+          raw = JSON.parse(raw);
+        } catch {}
+      }
+      const items = (Array.isArray(raw) ? raw : [])
+        .slice(0, 12)
+        .map((x: any) => ({ text: String(x?.text ?? x?.title ?? x ?? "").slice(0, 120), status: (["pending", "in_progress", "done"].includes(x?.status) ? x.status : "pending") as "pending" | "in_progress" | "done" }))
+        .filter((x) => x.text);
+      if (!items.length) throw new Error("items is empty");
+      if (!planStep) planStep = pushStep({ kind: "plan", items });
+      else updateStep(planStep, { items });
+      void persist();
+      const done = items.filter((x) => x.status === "done").length;
+      return { text: `Plan updated (${done}/${items.length} done). Continue with the next step.`, summary: `${done}/${items.length}` };
+    },
+  };
+  const allTools = [updatePlan, ...BUILTIN_TOOLS, ...mcp.tools, ...(groups.some((g) => !g.core) ? [useConnector] : [])];
   if (allTools.includes(useConnector)) active.add(useConnector.name);
   const byName = new Map(allTools.map((t) => [t.name, t]));
   const activeTools = () => allTools.filter((t) => active.has(t.name));
@@ -220,6 +278,15 @@ export async function runAgent(opts: {
 
   async function execTool(name: string, args: Record<string, unknown>): Promise<string> {
     const tool = byName.get(name);
+    const [ph, phLabel] = phaseOf(name, tool?.label);
+    setPhase(ph, phLabel);
+    if (name === "update_plan" && tool) {
+      try {
+        return (await tool.run(args, { ...toolCtx })).text;
+      } catch (e) {
+        return `ERROR: ${(e as Error).message}`;
+      }
+    }
     const step = pushStep({ kind: "tool", name, label: tool?.label ?? name, args: argsSummary(args), status: "running" });
     const t0 = Date.now();
     if (!tool) {
@@ -297,10 +364,30 @@ export async function runAgent(opts: {
         try {
           messages[0] = { role: "system", content: sysFor() };
           const spec = limitHit ? undefined : specFor();
-          r = await callModel(limitHit ? 40_000 : STEP_MS, (sig) => oa.completeWithTools({ model: model.modelId, messages, tools: spec, maxTokens, signal: sig }));
+          setPhase(round === 0 ? "plan" : limitHit ? "report" : "thinking", round === 0 ? "يفهم الطلب ويخطط" : limitHit ? "يكتب الملخص" : "يفكّر في الخطوة الجاية");
+          let lastTick = 0;
+          let streamedReasoning = false;
+          const onDelta = (d: { content?: string; reasoning?: string; tool?: string; argChars?: number }) => {
+            if (d.reasoning) {
+              streamedReasoning = true;
+              reasoning += d.reasoning;
+              emit({ type: "reasoning", text: d.reasoning });
+            }
+            const now = Date.now();
+            if (now - lastTick < 600) return;
+            lastTick = now;
+            if (d.tool) {
+              const [ph, lbl] = phaseOf(d.tool, byName.get(d.tool)?.label);
+              const kb = ((d.argChars ?? 0) / 1024).toFixed(1);
+              const big = d.tool === "write_files" || d.tool === "publish_site" || d.tool === "edit_file" || /push_files|create_or_update_file/.test(d.tool);
+              setPhase(ph, d.tool === "write_files" ? "يكتب الكود" : lbl, big && (d.argChars ?? 0) > 200 ? `${kb} ك.ب` : null);
+            } else if (d.content) setPhase("report", "يكتب الرد");
+          };
+          r = await callModel(limitHit ? 40_000 : STEP_MS, (sig) => oa.completeWithTools({ model: model.modelId, messages, tools: spec, maxTokens, signal: sig, onDelta }));
+          if (streamedReasoning) r = { ...r, reasoning: "" };
         } catch (e) {
           if (round === 0 && e instanceof ProviderError && (e.status === 400 || e.status === 422) && !signal.aborted) {
-            pushStep({ kind: "info", text: "النموذج رفض استدعاء الأدوات الأصلي، تحويل لبروتوكول ReAct النصي." });
+            pushStep({ kind: "info", text: "النموذج ما يدعم استدعاء الأدوات مباشرة — كمّلت بطريقة نصية بديلة." });
             native = false;
             break;
           }
@@ -353,6 +440,7 @@ export async function runAgent(opts: {
         let text = "";
         try {
           setSys();
+          setPhase(toolCalls === 0 ? "plan" : "thinking", toolCalls === 0 ? "يفهم الطلب ويخطط" : "يفكّر في الخطوة الجاية");
           text = await callModel(limitHit ? 40_000 : STEP_MS, async (sig) => {
             let t = "";
             for await (const ch of adapter.chat({ model: model.modelId, messages: msgs, maxTokens, signal: sig })) {
@@ -386,6 +474,19 @@ export async function runAgent(opts: {
     await persist();
   }
 
+  // Never let the summary miss (or invent) the real link: append every URL publish_site actually returned.
+  const published = [
+    ...new Set(
+      steps
+        .filter((s) => s.kind === "tool" && s.name === "publish_site" && s.status === "ok")
+        .map((s) => /"url"\s*:\s*"([^"]+)"/.exec(s.result ?? "")?.[1])
+        .filter((u): u is string => Boolean(u)),
+    ),
+  ];
+  const missing = published.filter((u) => !finalText.includes(u) && !finalText.includes(u.replace(/\/$/, "")));
+  if (missing.length) finalText = `${finalText.trimEnd()}\n\n🔗 **الرابط المنشور:** ${missing.map((u) => `[${u}](${u})`).join(" · ")}`;
+
+  setPhase("done", "خلص");
   // stream the final answer in small chunks so the UI renders progressively
   for (let i = 0; i < finalText.length; i += 400) emit({ type: "delta", text: finalText.slice(i, i + 400) });
   return { text: finalText, reasoning, usage, steps };

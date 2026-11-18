@@ -19,6 +19,8 @@ export interface ToolCompletionRequest {
   tools?: { type: "function"; function: { name: string; description: string; parameters: Record<string, unknown> } }[];
   maxTokens?: number;
   signal: AbortSignal;
+  /** When set, the completion is streamed and progress is reported live (text, reasoning, tool-call arguments). */
+  onDelta?: (d: { content?: string; reasoning?: string; tool?: string; argChars?: number }) => void;
 }
 export interface ToolCompletionResult {
   content: string;
@@ -169,6 +171,14 @@ export class OpenAICompatibleAdapter implements ProviderAdapter {
    * `messages` are raw OpenAI chat messages (may include assistant tool_calls and role:"tool" results).
    */
   async completeWithTools(req: ToolCompletionRequest): Promise<ToolCompletionResult> {
+    if (req.onDelta) {
+      try {
+        return await this.streamWithTools(req);
+      } catch (e) {
+        // some models/providers reject streamed tool calls: fall back to a normal request
+        if (!(e instanceof ProviderError) || !(e.status === 400 || e.status === 422)) throw e;
+      }
+    }
     const body: Record<string, unknown> = {
       model: req.model,
       messages: req.messages,
@@ -202,6 +212,72 @@ export class OpenAICompatibleAdapter implements ProviderAdapter {
       reasoning,
       toolCalls,
       usage: { promptTokens: u.prompt_tokens, completionTokens: u.completion_tokens, costUsd: typeof u.cost === "number" ? u.cost : undefined },
+    };
+  }
+
+  /** Streamed variant of completeWithTools: accumulates tool-call deltas and reports progress as it arrives. */
+  private async streamWithTools(req: ToolCompletionRequest): Promise<ToolCompletionResult> {
+    const body: Record<string, unknown> = {
+      model: req.model,
+      messages: req.messages,
+      stream: true,
+      stream_options: { include_usage: true },
+      ...(req.tools?.length ? { tools: req.tools, tool_choice: "auto" } : {}),
+      ...(req.maxTokens ? { max_tokens: req.maxTokens } : {}),
+      ...this.extraChatBody({ model: req.model, messages: [], signal: req.signal, webSearch: false }),
+    };
+    const res = await providerFetch(this.cfg, joinUrl(this.cfg.baseUrl, "/chat/completions"), { method: "POST", headers: this.headers(), body: JSON.stringify(body), signal: req.signal });
+    let content = "";
+    let reasoning = "";
+    const calls: { id: string; name: string; arguments: string }[] = [];
+    let usage: any = {};
+    const splitter = new ThinkTagSplitter();
+    for await (const { data } of sseData(res)) {
+      if (data === "[DONE]") break;
+      let j: any;
+      try {
+        j = JSON.parse(data);
+      } catch {
+        continue;
+      }
+      if (j?.error) throw new ProviderError(`${this.cfg.name}: ${j.error.message ?? JSON.stringify(j.error)}`, 502, true, false);
+      if (j?.usage) usage = j.usage;
+      const d = j?.choices?.[0]?.delta;
+      if (!d) continue;
+      const r = typeof d.reasoning_content === "string" ? d.reasoning_content : typeof d.reasoning === "string" ? d.reasoning : "";
+      if (r) {
+        reasoning += r;
+        req.onDelta?.({ reasoning: r });
+      }
+      if (typeof d.content === "string" && d.content) {
+        for (const part of splitter.push(d.content)) {
+          if (part.type === "text") {
+            content += part.text;
+            req.onDelta?.({ content: part.text });
+          } else {
+            reasoning += part.text;
+            req.onDelta?.({ reasoning: part.text });
+          }
+        }
+      }
+      for (const tc of Array.isArray(d.tool_calls) ? d.tool_calls : []) {
+        const i = typeof tc.index === "number" ? tc.index : calls.length;
+        const c = (calls[i] ??= { id: "", name: "", arguments: "" });
+        if (tc.id) c.id = String(tc.id);
+        if (tc.function?.name) c.name += String(tc.function.name);
+        if (tc.function?.arguments != null) c.arguments += typeof tc.function.arguments === "string" ? tc.function.arguments : JSON.stringify(tc.function.arguments);
+        req.onDelta?.({ tool: c.name, argChars: c.arguments.length });
+      }
+    }
+    for (const part of splitter.flush()) {
+      if (part.type === "text") content += part.text;
+      else reasoning += part.text;
+    }
+    return {
+      content,
+      reasoning,
+      toolCalls: calls.filter((c) => c?.name).map((c, i) => ({ id: c.id || `call_${Date.now()}_${i}`, name: c.name, arguments: c.arguments })),
+      usage: { promptTokens: usage.prompt_tokens, completionTokens: usage.completion_tokens, costUsd: typeof usage.cost === "number" ? usage.cost : undefined },
     };
   }
 

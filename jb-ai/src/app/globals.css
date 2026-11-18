@@ -4,10 +4,26 @@
 
 :root { color-scheme: dark; }
 html, body { height: 100%; }
+/* Native-app feel on phones: no double-tap zoom, no rubber-band, no sideways scroll */
+html, body {
+  overflow-x: hidden;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  max-width: 100vw;
+}
+/* iOS zooms into any focused field under 16px: keep every field at 16px on touch screens */
+@media (pointer: coarse), (max-width: 767px) {
+  input, textarea, select, .input { font-size: 16px !important; }
+}
+img, video, svg, canvas, iframe, table, pre { max-width: 100%; }
 body {
   @apply bg-ink-950 text-slate-100 antialiased;
   background-image: radial-gradient(1200px 600px at 50% 110%, rgba(56, 89, 160, 0.22), transparent 60%), linear-gradient(180deg, #050812 0%, #081024 100%);
   background-attachment: fixed;
+  padding-bottom: env(safe-area-inset-bottom, 0);
 }
 :lang(ar) { letter-spacing: 0; text-transform: none; font-style: normal; }
 .prose-chat, .msg-text { line-height: 1.8; }

@@ -9,6 +9,9 @@ import { getAdapter, ProviderError, type ChatImage, type ChatMessageInput } from
 import type { SystemSettings } from "./settings";
 import { runAgent } from "./agent/run";
 
+/** Default agent model first, then fallbacks — all tested end-to-end (plan → write → publish → verify). */
+export const AGENT_MODEL_CHAIN = ["DeepSeek V4.1 Flash", "GLM 5.3 Flash", "Kimi K3 Fast", "Qwen 3.8 Flash"] as const;
+
 export interface ChatInput {
   conversationId?: string | null;
   content: string;
@@ -101,6 +104,21 @@ export async function prepareChat(userId: string, plan: Plan, input: ChatInput, 
 
   const webSearch = input.webSearch && plan.allowWebSearch;
   const agent = Boolean(input.agent) && role !== "image";
+  if (agent) {
+    // agent runs fall back along a chain of models with reliable tool calling (rate limits / overload / timeouts)
+    const chain = await prisma.aiModel.findMany({
+      where: { enabled: true, supportsTools: true, displayName: { in: [...AGENT_MODEL_CHAIN] }, NOT: { modelId: { startsWith: "e2ee-" } }, provider: { enabled: true } },
+      include: { provider: true },
+    });
+    const have = new Set(targets.map((t) => t.model.id));
+    for (const name of AGENT_MODEL_CHAIN) {
+      const m = chain.find((x) => x.displayName === name);
+      if (m && !have.has(m.id) && targets.length < 4 && (await planAllowsModel(plan, m.id))) {
+        targets.push({ model: m, isFallback: true, reason: "agent fallback" });
+        have.add(m.id);
+      }
+    }
+  }
 
   // ----- persist the user turn
   if (!conversation) {

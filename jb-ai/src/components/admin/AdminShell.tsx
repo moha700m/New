@@ -29,7 +29,7 @@ export function AdminShell({ user, children }: { user: { email: string; role: st
       {open && <div className="fixed inset-0 z-30 bg-black/50 lg:hidden" onClick={() => setOpen(false)} />}
       <aside className={`fixed inset-y-0 start-0 z-40 flex w-64 flex-col border-e border-ink-700 bg-ink-950 transition-transform lg:sticky lg:top-0 lg:h-[100dvh] lg:translate-x-0 ${open ? "translate-x-0" : "translate-x-full"}`}>
         <div className="flex items-center justify-between px-4 py-4">
-          <Link href="/admin"><Logo name="JB AI · الإدارة" /></Link>
+          <Link href="/admin"><Logo name="محمد | التقني · الإدارة" /></Link>
           <button className="btn-ghost p-1.5 lg:hidden" onClick={() => setOpen(false)} aria-label="إغلاق القائمة"><X size={18} /></button>
         </div>
         <nav className="flex-1 space-y-0.5 overflow-y-auto px-2.5">

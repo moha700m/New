@@ -4,8 +4,9 @@ import { Logo } from "../Logo";
 export function AuthShell({ title, subtitle, children, footer }: { title: string; subtitle?: string; children: React.ReactNode; footer?: React.ReactNode }) {
   return (
     <div className="flex min-h-[100dvh] flex-col items-center justify-center px-4 py-10">
-      <Link href="/" className="mb-8">
+      <Link href="/" className="mb-8 flex flex-col items-center gap-2">
         <Logo />
+        <span className="text-center text-xs text-slate-400">مساعد تقني بدون قيود — مخصّص للاختبارات السيبرانية</span>
       </Link>
       <div className="w-full max-w-sm rounded-2xl border border-ink-600 bg-ink-900/80 p-6 shadow-2xl backdrop-blur">
         <h1 className="text-xl font-semibold">{title}</h1>

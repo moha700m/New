@@ -1,10 +1,10 @@
 "use client";
-import { AlertTriangle, Bot, Check, ChevronDown, Info, Loader2, Wrench } from "lucide-react";
+import { AlertTriangle, Bot, Check, ChevronDown, Circle, CircleDot, Info, Loader2, Wrench } from "lucide-react";
 import { useState } from "react";
 
 export interface UiAgentStep {
   id: string;
-  kind: "tool" | "note" | "info";
+  kind: "tool" | "note" | "info" | "plan";
   name?: string;
   label?: string;
   args?: string;
@@ -13,6 +13,27 @@ export interface UiAgentStep {
   result?: string;
   ms?: number;
   text?: string;
+  items?: { text: string; status: "pending" | "in_progress" | "done" }[];
+}
+
+function PlanList({ items }: { items: NonNullable<UiAgentStep["items"]> }) {
+  const done = items.filter((x) => x.status === "done").length;
+  return (
+    <li className="rounded-lg border border-ink-600 bg-ink-850/70 px-2.5 py-2" data-testid="agent-plan">
+      <div className="mb-1.5 flex items-center justify-between text-xs font-medium text-slate-300">
+        <span>الخطة</span>
+        <span className="tabular-nums text-slate-500">{done}/{items.length}</span>
+      </div>
+      <ul className="space-y-1">
+        {items.map((it, i) => (
+          <li key={i} className={`flex items-start gap-2 text-xs ${it.status === "done" ? "text-slate-500 line-through decoration-slate-600" : it.status === "in_progress" ? "text-sky-100" : "text-slate-400"}`}>
+            {it.status === "done" ? <Check size={13} className="mt-0.5 shrink-0 text-emerald-400" /> : it.status === "in_progress" ? <CircleDot size={13} className="mt-0.5 shrink-0 animate-pulse text-sky-300" /> : <Circle size={13} className="mt-0.5 shrink-0 text-slate-600" />}
+            <span>{it.text}</span>
+          </li>
+        ))}
+      </ul>
+    </li>
+  );
 }
 
 function ToolStep({ s }: { s: UiAgentStep }) {
@@ -48,7 +69,7 @@ export function AgentSteps({ steps, running }: { steps: UiAgentStep[]; running: 
   return (
     <div className="mb-3" data-testid="agent-steps">
       <button className="flex items-center gap-1.5 text-xs font-medium text-sky-300/90 hover:text-sky-200" onClick={() => setCollapsed((c) => !c)}>
-        <Bot size={14} /> {running ? "الوكيل يشتغل…" : "خطوات الوكيل"} · {tools} أداة
+        <Bot size={14} /> {running ? "الوكيل يشتغل" : "خطوات الوكيل"} · {tools} {tools === 1 ? "خطوة" : "خطوات"}
         <ChevronDown size={14} className={`transition ${collapsed ? "" : "rotate-180"}`} />
       </button>
       {!collapsed && (
@@ -56,6 +77,8 @@ export function AgentSteps({ steps, running }: { steps: UiAgentStep[]; running: 
           {steps.map((s) =>
             s.kind === "tool" ? (
               <ToolStep key={s.id} s={s} />
+            ) : s.kind === "plan" && s.items?.length ? (
+              <PlanList key={s.id} items={s.items} />
             ) : (
               <li key={s.id} dir="auto" className={`flex items-start gap-1.5 px-1 text-xs ${s.kind === "info" ? "text-amber-300/90" : "text-slate-400"}`}>
                 {s.kind === "info" ? <Info size={13} className="mt-0.5 shrink-0" /> : <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-500" />}
@@ -63,9 +86,7 @@ export function AgentSteps({ steps, running }: { steps: UiAgentStep[]; running: 
               </li>
             ),
           )}
-          {running && (
-            <li className="flex items-center gap-2 px-1 text-xs text-slate-500"><Loader2 size={13} className="animate-spin" /> يفكّر في الخطوة الجاية…</li>
-          )}
+
         </ol>
       )}
     </div>

@@ -15,6 +15,8 @@ import { Sidebar, type ConvItem, type MeInfo } from "./Sidebar";
 
 const MODEL_KEY = "jb.selectedModel";
 
+const AGENT_CHAIN = ["DeepSeek V4.1 Flash", "GLM 5.3 Flash", "Kimi K3 Fast", "Qwen 3.8 Flash"];
+
 export function ChatApp({ initialConversationId }: { initialConversationId?: string }) {
   const router = useRouter();
   const toast = useToast();
@@ -30,10 +32,24 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
   const [agent, setAgent] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      setCollapsed(localStorage.getItem("jb.sidebarCollapsed") === "1");
+    } catch {}
+  }, []);
+  const setCollapsedSaved = (v: boolean) => {
+    setCollapsed(v);
+    try {
+      localStorage.setItem("jb.sidebarCollapsed", v ? "1" : "0");
+    } catch {}
+  };
+  const isDesktop = () => typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches;
   const [connectorsOpen, setConnectorsOpen] = useState(false);
   const [connectorsCount, setConnectorsCount] = useState(0);
   const [spendKey, setSpendKey] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
+  const runRef = useRef<{ id: string; finished: boolean; seq: number } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
   const prevVersion = useRef<number>(0);
@@ -118,6 +134,8 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
         setMessages(d.messages.map((m) => ({ ...m, status: m.status as UiMessage["status"] })));
         setAgent(Boolean(d.conversation.agentMode));
         stickToBottom.current = true;
+        const live = d.messages.find((m) => m.role === "assistant" && m.status === "streaming");
+        if (live) void resumeRef.current?.(live.id);
       } catch (e) {
         toast((e as Error).message, "err");
         window.history.replaceState(null, "", "/");
@@ -153,78 +171,165 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
     setMessages((list) => list.map((m) => (m.id === id ? fn(m) : m)));
   }
 
+  /** Applies one server event to the assistant message (live stream and resume stream share this). */
+  function applyEvent(ref: { id: string; finished: boolean; seq: number }, ev: any) {
+    if (typeof ev.seq === "number") ref.seq = Math.max(ref.seq, ev.seq);
+    const now = Date.now();
+    const touch = (m: UiMessage, extra: Partial<NonNullable<UiMessage["live"]>> = {}): UiMessage => ({
+      ...m,
+      live: { startedAt: m.live?.startedAt ?? now, ...(m.live ?? {}), lastEventAt: now, reconnecting: false, ...extra },
+    });
+    if (ev.type === "meta") {
+      const oldId = ref.id;
+      ref.id = ev.assistantMessageId;
+      setMessages((list) =>
+        list.map((m) => {
+          if (m.id === oldId) return touch({ ...m, id: ev.assistantMessageId, modelName: ev.model?.name, notice: ev.notice, agent: Boolean(ev.agent) });
+          if (m.id === "pending-user" && ev.userMessageId) return { ...m, id: ev.userMessageId };
+          return m;
+        }),
+      );
+      if (ev.conversationId && (!activeIdRef.current || activeIdRef.current !== ev.conversationId)) {
+        activeIdRef.current = ev.conversationId;
+        setActiveId(ev.conversationId);
+        window.history.replaceState(null, "", `/c/${ev.conversationId}`);
+        setConversations((c) => [{ id: ev.conversationId, title: ev.title, updatedAt: new Date().toISOString() }, ...c.filter((x) => x.id !== ev.conversationId)]);
+      }
+      return;
+    }
+    const id = ref.id;
+    if (ev.type === "delta") patchMessage(id, (m) => touch({ ...m, content: m.content + ev.text }, m.agentSteps?.length ? { phase: "report", label: "يكتب الرد" } : {}));
+    else if (ev.type === "reasoning") patchMessage(id, (m) => touch({ ...m, reasoning: (m.reasoning ?? "") + ev.text }, m.content ? {} : { label: m.live?.label ?? "يفكّر…" }));
+    else if (ev.type === "agent_status") patchMessage(id, (m) => touch({ ...m, agent: true }, { phase: ev.phase, label: ev.label, detail: ev.detail ?? null }));
+    else if (ev.type === "ping" || ev.type === "keepalive") patchMessage(id, (m) => (m.status === "streaming" ? touch(m) : m));
+    else if (ev.type === "fallback") patchMessage(id, (m) => touch({ ...m, usedFallback: true, modelName: ev.model?.name, notice: `النموذج الأساسي مو متاح الحين — كمّل بالنموذج الاحتياطي ${ev.model?.name}` }));
+    else if (ev.type === "agent_step")
+      patchMessage(id, (m) => {
+        const steps = [...(m.agentSteps ?? [])];
+        const i = steps.findIndex((x) => x.id === ev.step.id);
+        if (i >= 0) steps[i] = ev.step;
+        else steps.push(ev.step);
+        return touch({ ...m, agentSteps: steps, agent: true });
+      });
+    else if (ev.type === "image") patchMessage(id, (m) => touch({ ...m, attachments: [...(m.attachments ?? []).filter((a) => a.id !== ev.attachmentId), { id: ev.attachmentId, filename: "generated", mimeType: ev.mimeType, kind: "generated-image" }] }));
+    else if (ev.type === "done") {
+      ref.finished = true;
+      patchMessage(id, (m) => ({ ...m, status: ev.status, modelName: ev.model?.name ?? m.modelName, costUsd: ev.costUsd ?? m.costUsd, live: null }));
+      setSpendKey((k) => k + 1);
+    } else if (ev.type === "final") {
+      ref.finished = true;
+      patchMessage(id, (m) => ({ ...m, status: ev.status, content: ev.content ?? m.content, error: ev.error ?? m.error, costUsd: ev.costUsd ?? m.costUsd, live: null }));
+    } else if (ev.type === "error") {
+      ref.finished = true;
+      patchMessage(id, (m) => ({ ...m, status: "error", error: ev.error, live: null }));
+    }
+  }
+
+  /** A per-connection abort controller linked to the run's, plus a watchdog: no bytes for 20 s → drop and reconnect. */
+  function connection(parent: AbortSignal) {
+    const c = new AbortController();
+    const onAbort = () => c.abort();
+    parent.addEventListener("abort", onAbort, { once: true });
+    let t: ReturnType<typeof setTimeout> | undefined;
+    const kick = () => {
+      clearTimeout(t);
+      t = setTimeout(() => c.abort(), 20_000);
+    };
+    kick();
+    return { signal: c.signal, kick, done: () => (clearTimeout(t), parent.removeEventListener("abort", onAbort)) };
+  }
+
+  async function readNdjson(res: Response, onEvent: (ev: any) => void, kick?: () => void) {
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      kick?.();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let nl: number;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (!line) continue;
+        try {
+          onEvent(JSON.parse(line));
+        } catch {}
+      }
+    }
+  }
+
+  /**
+   * Follows a run that lives on the server (after a dropped connection, a locked phone or a reload): replays stored
+   * events after `ref.seq` and keeps following until it finishes, reconnecting with backoff.
+   */
+  async function follow(ref: { id: string; finished: boolean; seq: number }, signal: AbortSignal) {
+    let delay = 800;
+    while (!ref.finished && !signal.aborted) {
+      const conn = connection(signal);
+      try {
+        const res = await fetch(`/api/chat/stream/${ref.id}?after=${ref.seq}`, { signal: conn.signal, cache: "no-store" });
+        if (res.status === 404 || res.status === 401) {
+          if (res.status === 401) router.push("/login");
+          patchMessage(ref.id, (m) => ({ ...m, status: m.status === "streaming" ? "error" : m.status, error: "تعذّر متابعة الرد.", live: null }));
+          return;
+        }
+        if (!res.ok || !res.body) throw new Error(String(res.status));
+        delay = 800;
+        await readNdjson(res, (ev) => applyEvent(ref, ev), conn.kick);
+      } catch (e) {
+        if (signal.aborted) return;
+        patchMessage(ref.id, (m) => (m.status === "streaming" ? { ...m, live: { ...(m.live ?? { startedAt: Date.now(), lastEventAt: Date.now() }), reconnecting: true } } : m));
+        await new Promise((r) => setTimeout(r, delay));
+        delay = Math.min(delay * 2, 8000);
+        if (typeof navigator !== "undefined" && !navigator.onLine) await new Promise((r) => window.addEventListener("online", r, { once: true }));
+      } finally {
+        conn.done();
+      }
+    }
+  }
+
   async function runChat(body: Record<string, unknown>, assistantTempId: string) {
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setStreaming(true);
     stickToBottom.current = true;
-    let assistantId = assistantTempId;
+    const ref = { id: assistantTempId, finished: false, seq: 0 };
+    runRef.current = ref;
+    patchMessage(assistantTempId, (m) => ({ ...m, agent: Boolean(body.agent), live: { startedAt: Date.now(), lastEventAt: Date.now(), label: body.agent ? "يبدأ…" : body.webSearch ? "يبحث ويكتب الرد…" : "يكتب الرد…" } }));
     try {
-      const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: ctrl.signal });
+      let res: Response;
+      const conn = connection(ctrl.signal);
+      try {
+        res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: conn.signal });
+      } catch (e) {
+        conn.done();
+        if (ctrl.signal.aborted) throw e;
+        patchMessage(ref.id, (m) => ({ ...m, status: "error", error: "ما قدرت أوصل للخادم — تأكد من الإنترنت وجرّب مرة ثانية.", live: null }));
+        return;
+      }
       if (!res.ok || !res.body) {
         const d = await res.json().catch(() => ({ error: `تعذّر الطلب (${res.status})` }));
         if (d.code === "model_unavailable") setSelectedModel(null);
-        patchMessage(assistantId, (m) => ({ ...m, status: "error", error: d.error }));
+        patchMessage(ref.id, (m) => ({ ...m, status: "error", error: d.error, live: null }));
         if (res.status === 401) router.push("/login");
         return;
       }
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        let nl: number;
-        while ((nl = buf.indexOf("\n")) >= 0) {
-          const line = buf.slice(0, nl).trim();
-          buf = buf.slice(nl + 1);
-          if (!line) continue;
-          const ev = JSON.parse(line);
-          if (ev.type === "meta") {
-            const oldId = assistantId;
-            assistantId = ev.assistantMessageId;
-            setMessages((list) =>
-              list.map((m) => {
-                if (m.id === oldId) return { ...m, id: ev.assistantMessageId, modelName: ev.model?.name, notice: ev.notice };
-                if (m.id === "pending-user" && ev.userMessageId) return { ...m, id: ev.userMessageId };
-                return m;
-              }),
-            );
-            if (!activeIdRef.current || activeIdRef.current !== ev.conversationId) {
-              activeIdRef.current = ev.conversationId;
-              setActiveId(ev.conversationId);
-              window.history.replaceState(null, "", `/c/${ev.conversationId}`);
-              setConversations((c) => [{ id: ev.conversationId, title: ev.title, updatedAt: new Date().toISOString() }, ...c.filter((x) => x.id !== ev.conversationId)]);
-            }
-          } else if (ev.type === "delta") {
-            patchMessage(assistantId, (m) => ({ ...m, content: m.content + ev.text }));
-          } else if (ev.type === "reasoning") {
-            patchMessage(assistantId, (m) => ({ ...m, reasoning: (m.reasoning ?? "") + ev.text }));
-          } else if (ev.type === "fallback") {
-            patchMessage(assistantId, (m) => ({ ...m, usedFallback: true, modelName: ev.model?.name, notice: `النموذج الأساسي غير متاح — أجاب النموذج الاحتياطي ${ev.model?.name} (${ev.provider})` }));
-          } else if (ev.type === "agent_step") {
-            patchMessage(assistantId, (m) => {
-              const steps = [...(m.agentSteps ?? [])];
-              const i = steps.findIndex((x) => x.id === ev.step.id);
-              if (i >= 0) steps[i] = ev.step;
-              else steps.push(ev.step);
-              return { ...m, agentSteps: steps };
-            });
-          } else if (ev.type === "image") {
-            patchMessage(assistantId, (m) => ({ ...m, attachments: [...(m.attachments ?? []), { id: ev.attachmentId, filename: "generated", mimeType: ev.mimeType, kind: "generated-image" }] }));
-          } else if (ev.type === "done") {
-            patchMessage(assistantId, (m) => ({ ...m, status: ev.status, modelName: ev.model?.name ?? m.modelName, costUsd: ev.costUsd ?? m.costUsd }));
-            setSpendKey((k) => k + 1);
-          } else if (ev.type === "error") {
-            patchMessage(assistantId, (m) => ({ ...m, status: "error", error: ev.error }));
-          }
-        }
+      try {
+        await readNdjson(res, (ev) => applyEvent(ref, ev), conn.kick);
+      } catch (e) {
+        if (ctrl.signal.aborted) throw e; // user navigated away / stopped; a watchdog abort just reconnects below
+      } finally {
+        conn.done();
       }
+      // the connection dropped before the end (phone locked, network switch…): the run continues on the server
+      if (!ref.finished && !ref.id.startsWith("pending")) await follow(ref, ctrl.signal);
+      else if (!ref.finished) patchMessage(ref.id, (m) => ({ ...m, status: "error", error: "انقطع الاتصال قبل ما يبدأ الرد. جرّب مرة ثانية.", live: null }));
     } catch (e) {
-      if ((e as Error).name === "AbortError") patchMessage(assistantId, (m) => ({ ...m, status: m.status === "streaming" ? "stopped" : m.status }));
-      else patchMessage(assistantId, (m) => ({ ...m, status: "error", error: "انقطع الاتصال أثناء استلام الرد." }));
+      if ((e as Error).name !== "AbortError") patchMessage(ref.id, (m) => ({ ...m, status: "error", error: "انقطع الاتصال أثناء استلام الرد.", live: null }));
     } finally {
+      if (runRef.current === ref) runRef.current = null;
       setStreaming(false);
       abortRef.current = null;
       setConversations((c) => {
@@ -236,6 +341,33 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
     }
   }
 
+  /** Re-attaches to a run that is still going on the server (opened conversation / page reload). */
+  async function resume(messageId: string) {
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    setStreaming(true);
+    const ref = { id: messageId, finished: false, seq: 0 };
+    runRef.current = ref;
+    patchMessage(messageId, (m) => ({ ...m, content: "", reasoning: "", agentSteps: [], attachments: [], live: { startedAt: Date.now(), lastEventAt: Date.now(), label: "يتابع الشغل…" } }));
+    try {
+      await follow(ref, ctrl.signal);
+    } finally {
+      if (runRef.current === ref) runRef.current = null;
+      setStreaming(false);
+      if (abortRef.current === ctrl) abortRef.current = null;
+    }
+  }
+
+  async function stopRun() {
+    const ref = runRef.current;
+    if (ref && !ref.id.startsWith("pending")) {
+      await fetch("/api/chat/stop", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messageId: ref.id }) }).catch(() => {});
+      patchMessage(ref.id, (m) => (m.live ? { ...m, live: { ...m.live, label: "يوقف…" } } : m));
+    } else abortRef.current?.abort();
+  }
+
+  const resumeRef = useRef<((id: string) => Promise<void>) | null>(null);
+  resumeRef.current = resume;
   const activeIdRef = useRef<string | null>(activeId);
   useEffect(() => {
     activeIdRef.current = activeId;
@@ -292,6 +424,18 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
     }
   }
 
+  async function removeAll() {
+    try {
+      const d = await api<{ deleted: number }>("/api/conversations", { method: "DELETE" });
+      abortRef.current?.abort();
+      setConversations([]);
+      newChat();
+      toast(`انحذفت ${d.deleted} محادثة.`, "ok");
+    } catch (e) {
+      toast((e as Error).message, "err");
+    }
+  }
+
   async function logout() {
     await api("/api/auth/logout", { method: "POST" }).catch(() => {});
     window.location.href = "/";
@@ -316,13 +460,13 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
   }
 
   const empty = !messages.length && !loadingConv;
-  const siteName = config?.site.name ?? "JB AI";
+  const siteName = config?.site.name ?? "محمد | التقني";
   const lastAssistantIdx = useMemo(() => messages.map((m) => m.role).lastIndexOf("assistant"), [messages]);
 
   const composer = (
     <Composer
       onSend={send}
-      onStop={() => abortRef.current?.abort()}
+      onStop={() => void stopRun()}
       streaming={streaming}
       think={think}
       setThink={setThink}
@@ -336,7 +480,19 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
       placeholder={current?.capabilities.imageGeneration ? `صِف الصورة التي تريد إنشاءها (${current.name})` : agentOn ? "وش المهمة؟ الوكيل يستخدم GitHub و MCP والويب والصور" : "اسأل أي شيء"}
       imageMode={Boolean(current?.capabilities.imageGeneration)}
       agent={agentOn}
-      setAgent={agentAvailable ? setAgent : undefined}
+      setAgent={
+        agentAvailable
+          ? (v: boolean) => {
+              setAgent(v);
+              // switch to the tested agent model when turning agent mode on (the user can still pick another)
+              const agentModel = config?.defaults.agent;
+              if (v && agentModel && selectedModel !== agentModel && !AGENT_CHAIN.includes(current?.name ?? "")) {
+                setSelectedModel(agentModel);
+                toast("وضع الوكيل يشتغل أفضل مع DeepSeek V4.1 Flash — اخترته لك.", "info");
+              }
+            }
+          : undefined
+      }
       onToggleImage={signedIn && (imageDefault || current?.capabilities.imageGeneration) ? toggleImageMode : undefined}
       onOpenConnectors={isAdmin ? () => setConnectorsOpen(true) : undefined}
       connectorsCount={connectorsCount}
@@ -346,7 +502,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
   );
 
   return (
-    <div className="flex h-[100dvh] overflow-hidden">
+    <div className="flex h-[100dvh] w-full max-w-[100vw] overflow-hidden">
       <Sidebar
         siteName={siteName}
         me={me}
@@ -356,6 +512,9 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
         onNew={newChat}
         onRename={rename}
         onDelete={remove}
+        onDeleteAll={removeAll}
+        collapsed={collapsed}
+        onCollapse={() => (isDesktop() ? setCollapsedSaved(true) : setSidebarOpen(false))}
         onSearch={(q) => signedIn && loadConversations(q)}
         onLogout={logout}
         open={sidebarOpen}
@@ -363,7 +522,13 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
       />
       <main className="relative flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center gap-2 px-3 sm:px-4">
-          <button className="btn-ghost p-2 md:hidden" onClick={() => setSidebarOpen(true)} aria-label="فتح القائمة">
+          <button
+            className={`btn-ghost p-2 ${collapsed ? "" : "md:hidden"}`}
+            onClick={() => (isDesktop() ? setCollapsedSaved(false) : setSidebarOpen(true))}
+            aria-label="إظهار المحادثات"
+            title="إظهار المحادثات"
+            data-testid="sidebar-open"
+          >
             <Menu size={20} />
           </button>
           <ModelPicker models={models} value={selectedModel} onChange={chooseModel} defaultId={defaultId} signedIn={signedIn} />
@@ -402,7 +567,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
           <>
             <div
               ref={scrollRef}
-              className="flex-1 overflow-y-auto"
+              className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain"
               onScroll={(e) => {
                 const el = e.currentTarget;
                 stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;

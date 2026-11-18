@@ -102,7 +102,7 @@ export function ConnectorsSheet({ open, onClose, onCount }: { open: boolean; onC
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-lg font-black text-ink-950">▲</span>
             <div className="min-w-0 flex-1">
               <div className="font-semibold">Vercel</div>
-              <div className="text-xs leading-5 text-slate-400">{gh?.connected ? "جاهز: الوكيل يرفع موقعك على GitHub ويعطيك زر «انشر على Vercel» — ضغطة وتسجيل دخول، وبعدها كل تحديث ينشر تلقائياً" : "يشتغل عن طريق GitHub — اربط GitHub أول"}</div>
+              <div className="text-xs leading-5 text-slate-400">{gh?.connected ? "جاهز: الوكيل يرفع موقعك على GitHub ويعطيك زر «انشر على Vercel» — ضغطة وتسجيل دخول، وبعدها كل تحديث ينشر تلقائيًا" : "يشتغل عن طريق GitHub — اربط GitHub أول"}</div>
             </div>
             {gh?.connected ? <CheckCircle2 size={18} className="shrink-0 text-emerald-400" /> : null}
           </div>
@@ -111,7 +111,7 @@ export function ConnectorsSheet({ open, onClose, onCount }: { open: boolean; onC
           <div className="flex items-center gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-300"><Sparkles size={18} /></span>
             <div className="min-w-0 flex-1">
-              <div className="font-semibold">مدمج دائماً</div>
+              <div className="font-semibold">مدمج دائمًا</div>
               <div className="text-xs leading-5 text-slate-400">بحث وقراءة الويب، توليد صور، ونشر موقع فوري برابط عام — بدون أي ربط</div>
             </div>
             <CheckCircle2 size={18} className="text-emerald-400" />

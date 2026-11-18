@@ -15,11 +15,11 @@ export interface SystemSettings {
 }
 
 export const DEFAULT_SETTINGS: SystemSettings = {
-  siteName: "JB AI",
-  tagline: "مساعدة في البرمجة، وأسئلة تقنية، وأكثر.",
+  siteName: "محمد | التقني",
+  tagline: "مساعد تقني بدون قيود — مخصّص للاختبارات السيبرانية",
   registrationOpen: true,
   requireEmailVerification: true,
-  systemPrompt: "أنت JB AI، مساعد ذكي ودقيق ومفيد. أجب بلغة المستخدم (بالعربية افتراضيًا إذا كتب بالعربية)، ونسّق إجاباتك بـ Markdown عند الحاجة.",
+  systemPrompt: "أنت «محمد | التقني»، مساعد ذكي ودقيق ومفيد. أجب بلغة المستخدم (بالعربية افتراضيًا إذا كتب بالعربية)، ونسّق إجاباتك بـ Markdown عند الحاجة.",
   maxHistoryMessages: 40,
   chatRateLimitPerMinute: 20,
   maintenanceMode: false,

@@ -35,7 +35,7 @@ export async function GET(req: Request) {
 <title>ربط GitHub</title><style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0b0f17;color:#e2e8f0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
 .c{max-width:360px;padding:28px;text-align:center}h1{font-size:20px;margin:0 0 8px}p{color:#94a3b8;font-size:14px;line-height:1.7;margin:0 0 20px}
 button{width:100%;padding:14px;border:0;border-radius:12px;background:#f8fafc;color:#0b0f17;font-size:16px;font-weight:700}</style></head>
-<body><div class="c"><h1>ربط GitHub</h1><p>بننقلك لـ GitHub عشان ينشئ تطبيق خاص فيك بضغطة «Create GitHub App»، بعدها ثبّته على حسابك وترجع هنا تلقائياً.</p>
+<body><div class="c"><h1>ربط GitHub</h1><p>بننقلك لـ GitHub عشان ينشئ تطبيق خاص فيك بضغطة «Create GitHub App»، بعدها ثبّته على حسابك وترجع هنا تلقائيًا.</p>
 <form id="f" method="post" action="${esc(m.action)}"><input type="hidden" name="manifest" value="${esc(JSON.stringify(m.manifest))}"><button type="submit">متابعة إلى GitHub ←</button></form></div>
 <script>setTimeout(function(){document.getElementById("f").submit()},300)</script></body></html>`;
     return new NextResponse(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });

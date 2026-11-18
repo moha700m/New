@@ -131,7 +131,7 @@ export interface PublicModel {
 export interface PublicCatalog {
   version: number;
   models: PublicModel[];
-  defaults: Record<RouteRole, string | null>;
+  defaults: Record<RouteRole, string | null> & { agent?: string | null };
   plans: { key: string; name: string; allowAllModels: boolean }[];
 }
 
@@ -208,6 +208,8 @@ export async function getPublicCatalog(): Promise<PublicCatalog> {
       code: pick(routing.defaultCodingModelId) ?? firstOf((m) => m.supportsCode && m.supportsText),
       vision: pick(routing.defaultVisionModelId) ?? firstOf((m) => m.supportsVision),
       image: pick(routing.defaultImageModelId) ?? firstOf((m) => m.supportsImageGeneration),
+      // best tested model for agent mode (tool calling + long file writes), see AGENT_MODEL_CHAIN
+      agent: usable.find((m) => m.displayName === "DeepSeek V4.1 Flash" && m.supportsTools && !m.modelId.startsWith("e2ee-"))?.id ?? null,
     },
     plans: plans.map((p) => ({ key: p.key, name: p.name, allowAllModels: p.allowAllModels })),
   };

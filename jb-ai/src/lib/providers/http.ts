@@ -28,18 +28,44 @@ function summarize(text: string) {
   return text.slice(0, 400) || "empty response";
 }
 
+const idleBumpers = new WeakMap<Response, () => void>();
+
+/**
+ * fetch with a timeout for the *response headers* and then an *idle* timeout while the body streams
+ * (reset on every chunk). A single total timeout used to cut long answers / web-search streams mid-way
+ * ("The operation was aborted due to timeout").
+ */
 export async function providerFetch(cfg: ProviderRuntimeConfig, url: string, init: RequestInit & { signal?: AbortSignal; timeoutMs?: number }) {
+  const limit = init.timeoutMs ?? cfg.timeoutMs;
+  const ctrl = new AbortController();
+  const onAbort = () => ctrl.abort(init.signal?.reason);
+  if (init.signal) {
+    if (init.signal.aborted) ctrl.abort(init.signal.reason);
+    else init.signal.addEventListener("abort", onAbort, { once: true });
+  }
+  let timer = setTimeout(() => ctrl.abort(new DOMException("timeout", "TimeoutError")), limit);
   let res: Response;
   try {
-    res = await fetch(url, { ...init, signal: withTimeout(init.signal, init.timeoutMs ?? cfg.timeoutMs) });
+    res = await fetch(url, { ...init, signal: ctrl.signal });
   } catch (e) {
+    clearTimeout(timer);
+    init.signal?.removeEventListener("abort", onAbort);
     const err = e as Error;
     if (init.signal?.aborted) throw err; // caller cancelled: propagate as abort
     const timeout = err.name === "TimeoutError" || err.name === "AbortError";
     throw new ProviderError(timeout ? `${cfg.name}: request timed out` : `${cfg.name}: network error (${err.message})`, 0, true, true);
   }
+  clearTimeout(timer);
+  const idleMs = Math.max(limit, 90_000);
+  const bump = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => ctrl.abort(new DOMException("idle timeout", "TimeoutError")), idleMs);
+  };
+  bump();
+  idleBumpers.set(res, bump);
   if (!res.ok) {
     const body = await res.text().catch(() => "");
+    clearTimeout(timer);
     const msg = `${cfg.name} ${res.status}: ${summarize(body)}`;
     const s = res.status;
     const retryable = s === 429 || s >= 500;
@@ -60,6 +86,7 @@ export async function* sseData(res: Response): AsyncGenerator<{ event?: string; 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
+      idleBumpers.get(res)?.();
       buf += decoder.decode(value, { stream: true });
       let idx: number;
       while ((idx = buf.indexOf("\n")) >= 0) {

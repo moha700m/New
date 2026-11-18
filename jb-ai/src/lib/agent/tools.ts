@@ -175,17 +175,63 @@ const webSearch: AgentTool = {
   async run(args, ctx) {
     const q = String(args.query ?? "").trim();
     if (!q) throw new Error("query is required");
-    try {
-      const r = await ddgSearch(q, ctx.signal);
-      return { text: r.map((x, i) => `${i + 1}. ${x.title}\n   ${x.url}\n   ${x.snippet}`).join("\n"), summary: `${r.length} نتيجة (DuckDuckGo)` };
-    } catch (e) {
-      if (ctx.signal.aborted) throw e;
-      const v = await veniceSearch(q, ctx.signal);
-      const list = v.results.map((x, i) => `${i + 1}. ${x.title}\n   ${x.url}\n   ${x.snippet}`).join("\n");
-      return { text: `${list || "(no citation list)"}\n\nSummary:\n${clip(v.summary, 4000)}`, summary: `${v.results.length} نتيجة (Venice search)` };
+    // DuckDuckGo lite → DuckDuckGo html → Venice web search (with retries); only fails if all of them do
+    const errors: string[] = [];
+    for (const [label, fn] of [
+      ["DuckDuckGo", () => ddgSearch(q, ctx.signal)],
+      ["DuckDuckGo", () => ddgHtmlSearch(q, ctx.signal)],
+    ] as const) {
+      try {
+        const r = await fn();
+        return { text: r.map((x, i) => `${i + 1}. ${x.title}\n   ${x.url}\n   ${x.snippet}`).join("\n"), summary: `${r.length} نتيجة (${label})` };
+      } catch (e) {
+        if (ctx.signal.aborted) throw e;
+        errors.push((e as Error).message);
+      }
     }
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const v = await veniceSearch(q, ctx.signal);
+        const list = v.results.map((x, i) => `${i + 1}. ${x.title}\n   ${x.url}\n   ${x.snippet}`).join("\n");
+        return { text: `${list || "(no citation list)"}\n\nSummary:\n${clip(v.summary, 4000)}`, summary: `${v.results.length} نتيجة (Venice)` };
+      } catch (e) {
+        if (ctx.signal.aborted) throw e;
+        errors.push((e as Error).message);
+        if (!/429|5\d\d|timeout|network|fetch failed/i.test((e as Error).message)) break;
+        await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+      }
+    }
+    throw new Error(`البحث ما زبط الحين (${errors.join(" · ").slice(0, 300)}) — جرّب صياغة ثانية أو web_fetch لرابط مباشر.`);
   },
 };
+
+/** Second DuckDuckGo endpoint (different HTML) — lite sometimes answers 202/empty from cloud IPs. */
+async function ddgHtmlSearch(q: string, signal: AbortSignal) {
+  const res = await fetch("https://html.duckduckgo.com/html/", {
+    method: "POST",
+    headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 Version/17.5 Safari/605.1.15", "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ q }).toString(),
+    signal: sigWith(signal, 9000),
+  });
+  if (!res.ok) throw new Error(`ddg-html ${res.status}`);
+  const html = await res.text();
+  const out: { title: string; url: string; snippet: string }[] = [];
+  const blocks = html.split(/class="result__body"|class="result results_links/).slice(1);
+  for (const b of blocks) {
+    const a = b.match(/class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/);
+    if (!a) continue;
+    let url = a[1]!;
+    const uddg = url.match(/[?&]uddg=([^&]+)/);
+    if (uddg) url = decodeURIComponent(uddg[1]!);
+    if (url.startsWith("//")) url = "https:" + url;
+    if (/duckduckgo\.com\/y\.js/.test(url)) continue;
+    const sn = b.match(/class="result__snippet"[^>]*>([\s\S]*?)<\/a>/);
+    out.push({ title: htmlToText(a[2]!).text, url, snippet: sn ? htmlToText(sn[1]!).text : "" });
+    if (out.length >= 8) break;
+  }
+  if (!out.length) throw new Error("ddg-html: no results parsed");
+  return out;
+}
 
 // ------------------------------------------------------------------ built-in: generate_image
 const generateImage: AgentTool = {
@@ -238,10 +284,32 @@ const SITE_MAX_BYTES = 12_000_000;
 /** Some models pass arrays/objects as a JSON string — accept both. */
 export function looseJson(v: unknown): unknown {
   if (typeof v !== "string") return v;
-  const t = v.trim();
-  if (!t.startsWith("[") && !t.startsWith("{")) return v;
+  let t = v.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  const first = t.search(/[[{]/);
+  if (first !== 0) return v;
+  const close = t[first] === "[" ? "]" : "}";
+  t = t.slice(first, t.lastIndexOf(close) + 1);
   try {
     return JSON.parse(t);
+  } catch {}
+  // models sometimes put raw newlines/tabs inside JSON strings: escape control characters that sit inside quotes
+  let out = "";
+  let inStr = false;
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i]!;
+    if (inStr && c === "\\") {
+      out += c + (t[i + 1] ?? "");
+      i++;
+      continue;
+    }
+    if (c === '"') inStr = !inStr;
+    if (inStr && c === "\n") out += "\\n";
+    else if (inStr && c === "\r") out += "\\r";
+    else if (inStr && c === "\t") out += "\\t";
+    else out += c;
+  }
+  try {
+    return JSON.parse(out);
   } catch {
     return v;
   }
@@ -273,7 +341,7 @@ const publishSite: AgentTool = {
   name: "publish_site",
   label: "نشر موقع فوري",
   description:
-    "Publish a static website (HTML/CSS/JS files) instantly and get a public URL — no GitHub or hosting account needed. Use for landing pages, prototypes, games, demos. Must include index.html. External CDNs (Tailwind CDN, Google Fonts, libraries) and external image URLs are allowed. Images generated with generate_image can be included as {path, attachment_id}. Pass the same slug again to update an existing site.",
+    "Publish a static website (HTML/CSS/JS files) instantly and get a public URL — no GitHub or hosting account needed. Use for landing pages, prototypes, games, demos. Must include index.html. External CDNs (Tailwind CDN, Google Fonts, libraries) and external image URLs are allowed. Images generated with generate_image can be included as {path, attachment_id}. Pass the same slug again to update an existing site. If you already wrote the files with write_files/edit_file, call this with only {slug, title} (files omitted = publish the workspace) — do not resend the contents.",
   parameters: {
     type: "object",
     properties: {
@@ -284,8 +352,27 @@ const publishSite: AgentTool = {
     required: [],
   },
   async run(args, ctx) {
-    const files = await normalizeFiles(args.files ?? workspaceFiles(ctx), ctx.userId);
-    if (!files["index.html"]) throw new Error("index.html is required");
+    // Always start from the workspace; files passed explicitly override/add (e.g. only {path, attachment_id} images).
+    // Placeholder or empty contents ("@@WORKSPACE@@", "...") mean "use the workspace copy".
+    const given = looseJson(args.files);
+    const list = (Array.isArray(given) ? given : given && typeof given === "object" ? Object.entries(given).map(([path, content]) => ({ path, content })) : []) as {
+      path?: string;
+      content?: unknown;
+      attachment_id?: string;
+    }[];
+    const ws = ctx.workspace ?? new Map<string, string>();
+    const merged = new Map<string, Record<string, unknown>>();
+    for (const [path, content] of ws) merged.set(path, { path, content });
+    for (const f of list) {
+      const path = String(f.path ?? "").trim().replace(/^\.?\/+/, "");
+      if (!path) continue;
+      const c = typeof f.content === "string" ? f.content.trim() : "";
+      const placeholder = !f.attachment_id && (!c || /^(@@.*@@|\.\.\.|…|<workspace>|workspace|same|unchanged)$/i.test(c));
+      if (placeholder && ws.has(path)) continue;
+      merged.set(path, f as Record<string, unknown>);
+    }
+    const files = await normalizeFiles([...merged.values()], ctx.userId);
+    if (!files["index.html"]) throw new Error("index.html is required — write it with write_files first (or pass it in files).");
     let slug = String(args.slug ?? "").toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
     if (!slug) slug = `site-${Math.random().toString(36).slice(2, 8)}`;
     const title = String(args.title ?? slug).slice(0, 120);
@@ -310,7 +397,7 @@ const writeFiles: AgentTool = {
   async run(args, ctx) {
     const list = looseJson(args.files);
     const arr = (Array.isArray(list) ? list : list && typeof list === "object" ? Object.entries(list).map(([path, content]) => ({ path, content })) : []) as { path: string; content: string }[];
-    if (!arr.length) throw new Error("files is empty");
+    if (!arr.length) throw new Error('files is empty or not valid JSON — pass files as a real array: [{"path":"index.html","content":"..."}] (not a string).');
     ctx.workspace ??= new Map();
     for (const f of arr.slice(0, 80)) {
       const path = String(f.path ?? "").trim().replace(/^\.?\/+/, "");
@@ -337,14 +424,71 @@ const readWorkspace: AgentTool = {
   },
 };
 
+const editFile: AgentTool = {
+  name: "edit_file",
+  label: "تعديل ملف",
+  description: "Edit a workspace file in place: replace an exact snippet (old_text → new_text). Cheaper and safer than rewriting the whole file for small fixes.",
+  parameters: { type: "object", properties: { path: { type: "string" }, old_text: { type: "string" }, new_text: { type: "string" }, replace_all: { type: "boolean" } }, required: ["path", "old_text", "new_text"] },
+  async run(args, ctx) {
+    const ws = (ctx.workspace ??= new Map());
+    const path = String(args.path ?? "").replace(/^\.?\/+/, "");
+    const c = ws.get(path);
+    if (c == null) throw new Error(`file not found in workspace: ${path} (files: ${[...ws.keys()].join(", ") || "none"})`);
+    const oldT = String(args.old_text ?? "");
+    if (!oldT || !c.includes(oldT)) throw new Error("old_text not found in the file — read_files it and copy the exact snippet");
+    const n = c.split(oldT).length - 1;
+    const next = args.replace_all ? c.split(oldT).join(String(args.new_text ?? "")) : c.replace(oldT, String(args.new_text ?? ""));
+    ws.set(path, next);
+    return { text: `Edited ${path}: ${args.replace_all ? n : 1} replacement(s). Now ${next.length.toLocaleString("en")} chars.`, summary: `${path} · ${args.replace_all ? n : 1} تعديل` };
+  },
+};
+const loadSite: AgentTool = {
+  name: "load_site",
+  label: "فتح موقع منشور",
+  description: "Load a site previously published with publish_site into the workspace (by slug or its /s/<slug>/ URL), to edit it and publish again with the same slug. Without args, lists recent sites.",
+  parameters: { type: "object", properties: { slug: { type: "string" } }, required: [] },
+  async run(args, ctx) {
+    const raw = String(args.slug ?? "").trim();
+    if (!raw) {
+      const list = await prisma.site.findMany({ orderBy: { updatedAt: "desc" }, take: 20, select: { slug: true, title: true, updatedAt: true } });
+      return { text: list.map((x) => `${x.slug} — ${x.title} (${x.updatedAt.toISOString().slice(0, 10)})`).join("\n") || "(no sites yet)", summary: `${list.length} موقع` };
+    }
+    const slug = raw.replace(/^.*\/s\//, "").replace(/\/.*$/, "");
+    const site = await prisma.site.findUnique({ where: { slug } });
+    if (!site) throw new Error(`no published site with slug ${slug}`);
+    ctx.workspace ??= new Map();
+    const files = (site.files ?? {}) as Record<string, string>;
+    for (const [p, c] of Object.entries(files)) ctx.workspace.set(p, String(c));
+    return { text: `Loaded ${Object.keys(files).length} file(s) of "${site.title}" (slug ${slug}) into the workspace: ${Object.keys(files).join(", ")}. Publish again with publish_site slug=${slug}.`, summary: `${Object.keys(files).length} ملف من ${slug}` };
+  },
+};
+
 // ------------------------------------------------------------------ live check
 const checkUrl: AgentTool = {
   name: "check_url",
   label: "فحص الرابط",
-  description: "Verify a deployed site is live: fetches the URL (retrying for up to ~60 s while a deploy propagates) and returns the HTTP status and page title.",
-  parameters: { type: "object", properties: { url: { type: "string" }, wait_seconds: { type: "integer", description: "max seconds to keep retrying (default 60)" } }, required: ["url"] },
+  description: "Verify a deployed site is live: fetches the URL (retrying for up to ~60 s while a deploy propagates) and returns the HTTP status and page title. Pass expect_text to also confirm real content (e.g. the business name) is on the page.",
+  parameters: { type: "object", properties: { url: { type: "string" }, wait_seconds: { type: "integer", description: "max seconds to keep retrying (default 60)" }, expect_text: { type: "string", description: "text that must appear in the page" } }, required: ["url"] },
   async run(args, ctx) {
-    const u = assertPublicUrl(String(args.url ?? ""));
+    const raw = String(args.url ?? "").trim();
+    const expectOwn = String(args.expect_text ?? "").trim();
+    // A site we host ourselves (/s/<slug>): when this server can't reach itself over the network (local dev, private host)
+    // verify straight from the database instead of failing.
+    const own = raw.startsWith(siteBaseUrl() + "/s/") ? /\/s\/([a-z0-9-]+)/i.exec(raw)?.[1] : undefined;
+    let u: URL;
+    try {
+      u = assertPublicUrl(raw);
+    } catch (e) {
+      if (!own) throw e;
+      const site = await prisma.site.findUnique({ where: { slug: own.toLowerCase() } });
+      if (!site) return { text: `NOT LIVE: no published site with slug "${own}". Publish it with publish_site first.`, summary: "✗ الموقع مو منشور" };
+      const files = (site.files ?? {}) as Record<string, unknown>;
+      const html = typeof files["index.html"] === "string" ? (files["index.html"] as string) : JSON.stringify(files["index.html"] ?? "");
+      const title = /<title[^>]*>([^<]*)<\/title>/i.exec(html)?.[1]?.trim() ?? site.title;
+      if (expectOwn && !html.includes(expectOwn) && !Object.values(files).some((v) => typeof v === "string" && v.includes(expectOwn)))
+        return { text: `LIVE but expected text "${expectOwn}" NOT found · ${raw} · title: ${title}`, summary: "⚠️ النص المطلوب مو موجود" };
+      return { text: `LIVE ✓ HTTP 200 · ${raw} · title: ${title} · ${Object.keys(files).length} file(s)${expectOwn ? ` · contains "${expectOwn}"` : ""}`, summary: `✓ 200 · ${title.slice(0, 40)}` };
+    }
     const until = Date.now() + Math.min(Number(args.wait_seconds) || 60, 90) * 1000;
     let last = "";
     for (let i = 0; ; i++) {
@@ -353,7 +497,9 @@ const checkUrl: AgentTool = {
         const body = (await r.text()).slice(0, 200_000);
         const title = /<title[^>]*>([^<]*)<\/title>/i.exec(body)?.[1]?.trim() ?? "";
         last = `HTTP ${r.status} · ${r.url}${title ? ` · title: ${title}` : ""} · ${body.length.toLocaleString("en")} bytes`;
-        if (r.ok) return { text: `LIVE ✓ ${last}`, summary: `✓ ${r.status}${title ? ` · ${title.slice(0, 40)}` : ""}` };
+        const expect = String(args.expect_text ?? "").trim();
+        if (r.ok && expect && !body.includes(expect)) return { text: `LIVE but expected text "${expect}" NOT found · ${last}`, summary: `⚠️ ${r.status} · النص المطلوب مو موجود` };
+        if (r.ok) return { text: `LIVE ✓ ${last}${expect ? ` · contains "${expect}"` : ""}`, summary: `✓ ${r.status}${title ? ` · ${title.slice(0, 40)}` : ""}` };
       } catch (e) {
         last = (e as Error).message;
       }
@@ -364,7 +510,7 @@ const checkUrl: AgentTool = {
   },
 };
 
-export const BUILTIN_TOOLS: AgentTool[] = [webSearch, webFetch, generateImage, writeFiles, readWorkspace, publishSite, checkUrl];
+export const BUILTIN_TOOLS: AgentTool[] = [webSearch, webFetch, generateImage, writeFiles, editFile, readWorkspace, loadSite, publishSite, checkUrl];
 
 // ------------------------------------------------------------------ MCP servers
 type ServerRow = Awaited<ReturnType<typeof prisma.mcpServer.findMany>>[number];

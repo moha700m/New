@@ -3,6 +3,7 @@ import { AgentSteps, type UiAgentStep } from "./AgentSteps";
 import { AlertTriangle, Brain, Check, ChevronDown, Copy, FileText, Pencil, RefreshCw, Shuffle } from "lucide-react";
 import { useState } from "react";
 import { Markdown } from "./Markdown";
+import { LiveStatus, type UiLive } from "./LiveStatus";
 
 export interface UiAttachment {
   id: string;
@@ -26,6 +27,8 @@ export interface UiMessage {
   attachments?: UiAttachment[];
   agentSteps?: UiAgentStep[] | null;
   costUsd?: number | null;
+  live?: UiLive | null;
+  agent?: boolean;
 }
 
 function Attachments({ list }: { list: UiAttachment[] }) {
@@ -121,7 +124,10 @@ export function MessageView({ m, isLast, canAct, onRegenerate, onEdit }: { m: Ui
             <ChevronDown size={14} className={`transition ${showReasoning ? "rotate-180" : ""}`} />
           </button>
           {(showReasoning || (streaming && !m.content)) && (
-            <div dir="auto" className="mt-2 max-h-72 overflow-y-auto whitespace-pre-wrap border-s-2 border-ink-500 ps-3 text-sm leading-6 text-slate-400">{m.reasoning}</div>
+            <div dir="auto" className={`mt-2 overflow-y-auto whitespace-pre-wrap border-s-2 border-ink-500 ps-3 text-sm leading-6 text-slate-400 ${showReasoning ? "max-h-72" : "max-h-24"}`}>
+              {/* while it is thinking, show only the latest lines so the live status and steps stay in view */}
+              {showReasoning ? m.reasoning : m.reasoning.length > 420 ? "…" + m.reasoning.slice(-420) : m.reasoning}
+            </div>
           )}
         </div>
       )}
@@ -131,19 +137,24 @@ export function MessageView({ m, isLast, canAct, onRegenerate, onEdit }: { m: Ui
         <div dir="auto" className={streaming ? "typing-cursor" : ""}>
           <Markdown text={m.content} />
         </div>
-      ) : streaming && !m.reasoning && !m.agentSteps?.length ? (
+      ) : streaming && !m.reasoning && !m.agentSteps?.length && !m.live ? (
         <div className="flex h-7 items-center gap-1" aria-label="جارٍ التوليد">
           {[0, 1, 2].map((i) => (
             <span key={i} className="h-2 w-2 animate-bounce rounded-full bg-slate-400" style={{ animationDelay: `${i * 0.15}s` }} />
           ))}
         </div>
       ) : null}
-      {m.status === "error" && (
-        <div className="mt-2 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-950/40 px-3 py-2 text-sm text-red-200" data-testid="msg-error">
-          <AlertTriangle size={16} className="mt-0.5 shrink-0" /> {m.error || "حدث خطأ غير متوقع."}
+      {streaming && m.live && (
+        <div className="sticky bottom-2 z-10 mt-2">
+          <LiveStatus live={m.live} agent={Boolean(m.agent || m.agentSteps?.length)} />
         </div>
       )}
-      {m.status === "stopped" && <div className="mt-1 text-xs text-slate-500">تم إيقاف التوليد.</div>}
+      {m.status === "error" && (
+        <div className="mt-2 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-950/40 px-3 py-2 text-sm text-red-200" data-testid="msg-error">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" /> {m.error || "صار خطأ غير متوقع."}
+        </div>
+      )}
+      {m.status === "stopped" && <div className="mt-1 text-xs text-slate-500">تم إيقاف الرد.</div>}
       {!streaming && (
         <div className="mt-2 flex items-center gap-1 text-slate-500">
           {m.content && (

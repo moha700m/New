@@ -1,5 +1,5 @@
 "use client";
-import { CreditCard, LogOut, MessageSquare, MoreHorizontal, Pencil, Plus, Search, Settings, Shield, Trash2, X } from "lucide-react";
+import { AlertTriangle, CreditCard, Loader2, LogOut, MessageSquare, MoreHorizontal, PanelRightClose, Pencil, Plus, Search, Settings, Shield, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Logo } from "../Logo";
@@ -35,6 +35,10 @@ export function Sidebar(props: {
   onNew: () => void;
   onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
+  onDeleteAll: () => Promise<void>;
+  /** desktop: collapse the sidebar (remembered); mobile: close the drawer */
+  onCollapse: () => void;
+  collapsed: boolean;
   onSearch: (q: string) => void;
   onLogout: () => void;
   open: boolean;
@@ -46,6 +50,8 @@ export function Sidebar(props: {
   const [searching, setSearching] = useState(false);
   const [q, setQ] = useState("");
   const [userMenu, setUserMenu] = useState(false);
+  const [confirmAll, setConfirmAll] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const user = props.me?.user;
 
@@ -72,15 +78,16 @@ export function Sidebar(props: {
       {props.open && <div className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={props.onClose} />}
       <aside
         ref={menuRef}
-        className={`fixed inset-y-0 start-0 z-40 flex w-[272px] flex-col border-e border-ink-700 bg-ink-950/95 backdrop-blur transition-transform md:static md:translate-x-0 ${props.open ? "translate-x-0" : "translate-x-full"}`}
+        className={`fixed inset-y-0 start-0 z-40 flex w-[272px] max-w-[85vw] flex-col border-e border-ink-700 bg-ink-950/95 backdrop-blur transition-transform md:static md:translate-x-0 ${props.open ? "translate-x-0" : "translate-x-full"} ${props.collapsed ? "md:hidden" : ""}`}
+        data-testid="sidebar"
         aria-label="المحادثات"
       >
         <div className="flex items-center justify-between px-4 pb-2 pt-4">
           <Link href="/" onClick={props.onNew}>
             <Logo name={props.siteName} />
           </Link>
-          <button className="btn-ghost p-1.5 md:hidden" onClick={props.onClose} aria-label="إغلاق القائمة">
-            <X size={18} />
+          <button className="btn-ghost p-1.5" onClick={props.onCollapse} aria-label="إخفاء المحادثات" title="إخفاء المحادثات" data-testid="sidebar-collapse">
+            <PanelRightClose size={18} />
           </button>
         </div>
         <nav className="space-y-0.5 px-2.5 py-2">
@@ -105,7 +112,15 @@ export function Sidebar(props: {
             <CreditCard size={16} /> الباقات والأسعار
           </Link>
         </nav>
-        <div className="mt-2 flex-1 overflow-y-auto px-2.5 pb-3">
+        {user && props.conversations.length > 0 && (
+          <div className="flex items-center justify-between px-5 pt-1 text-xs text-slate-500">
+            <span>المحادثات</span>
+            <button className="rounded-md px-2 py-1 text-red-300/90 hover:bg-red-950/50 hover:text-red-200" onClick={() => setConfirmAll(true)} data-testid="delete-all">
+              <Trash2 size={13} className="me-1 inline" /> حذف الكل
+            </button>
+          </div>
+        )}
+        <div className="mt-1 flex-1 overflow-y-auto overscroll-contain px-2.5 pb-3">
           {!user && <p className="px-2.5 pt-2 text-sm text-slate-500">سجّل دخولك لتُحفظ محادثاتك بأمان على جميع أجهزتك.</p>}
           {user && !props.conversations.length && <p className="px-2.5 pt-2 text-sm text-slate-500">{q ? "لا توجد محادثات مطابقة." : "لا توجد محادثات بعد."}</p>}
           {props.conversations.map((c) => {
@@ -190,6 +205,40 @@ export function Sidebar(props: {
           )}
         </div>
       </aside>
+      {confirmAll && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4" onClick={() => !deletingAll && setConfirmAll(false)}>
+          <div role="alertdialog" aria-modal="true" aria-labelledby="del-all-title" className="w-full max-w-sm rounded-2xl border border-red-500/40 bg-ink-900 p-5 shadow-2xl" onClick={(e) => e.stopPropagation()} data-testid="delete-all-dialog">
+            <div className="flex items-center gap-2 text-red-300">
+              <AlertTriangle size={20} />
+              <h2 id="del-all-title" className="text-base font-semibold">حذف كل المحادثات؟</h2>
+            </div>
+            <p className="mt-3 text-sm leading-7 text-slate-300">
+              بتنحذف كل محادثاتك ({props.conversations.length}{props.conversations.length >= 200 ? "+" : ""}) نهائيًا مع رسائلها ومرفقاتها، وأي رد شغّال بيوقف. <strong className="text-red-300">ما تقدر تتراجع عن هذي الخطوة.</strong>
+            </p>
+            <div className="mt-5 flex gap-2">
+              <button
+                className="btn flex-1 bg-red-600 text-white hover:bg-red-500 disabled:opacity-60"
+                disabled={deletingAll}
+                onClick={async () => {
+                  setDeletingAll(true);
+                  try {
+                    await props.onDeleteAll();
+                    setConfirmAll(false);
+                  } finally {
+                    setDeletingAll(false);
+                  }
+                }}
+                data-testid="delete-all-confirm"
+              >
+                {deletingAll ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />} احذف الكل
+              </button>
+              <button className="btn-outline flex-1" disabled={deletingAll} onClick={() => setConfirmAll(false)} data-testid="delete-all-cancel">
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

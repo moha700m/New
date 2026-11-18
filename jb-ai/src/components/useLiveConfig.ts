@@ -19,7 +19,7 @@ export interface LiveConfig {
   site: { name: string; tagline: string; maintenanceMode: boolean; registrationOpen: boolean };
   planKey: string | null;
   live: { mode: "sse" | "poll"; intervalMs: number };
-  defaults: { text: string | null; reasoning: string | null; code: string | null; vision: string | null; image: string | null };
+  defaults: { text: string | null; reasoning: string | null; code: string | null; vision: string | null; image: string | null; agent?: string | null };
   models: LiveModel[];
 }
 

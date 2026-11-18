@@ -139,6 +139,7 @@ model Message {
   usedFallback   Boolean      @default(false)
   agentSteps     Json?
   costUsd        Float?
+  stopRequested  Boolean      @default(false)
   createdAt      DateTime     @default(now())
   attachments    Attachment[]
 
@@ -469,3 +470,15 @@ model Site {
   updatedAt DateTime @updatedAt
 }
 
+
+/// Event log of a server-side chat/agent run, so clients can reconnect and resume from the last seq.
+model ChatEvent {
+  id        Int      @id @default(autoincrement())
+  messageId String
+  seq       Int
+  data      Json
+  createdAt DateTime @default(now())
+
+  @@index([messageId, seq])
+  @@index([createdAt])
+}

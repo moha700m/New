@@ -58,7 +58,7 @@ export function ModelPicker({ models, value, onChange, defaultId, signedIn }: { 
         data-testid="model-selector"
       >
         <Icon size={15} className={`shrink-0 ${currentTab.tint}`} />
-        <span className="truncate" dir="auto">{current ? current.name : models.length ? "اختر نموذج" : "لا توجد نماذج"}</span>
+        <span className="truncate" dir="auto">{current ? current.name : models.length ? "اختر نموذجًا" : "لا توجد نماذج"}</span>
         <ChevronDown size={15} className="shrink-0 opacity-60" />
       </button>
       {open && (

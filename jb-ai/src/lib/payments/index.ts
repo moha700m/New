@@ -67,7 +67,7 @@ export async function paymentStatus() {
 async function stripe(): Promise<Stripe> {
   const { secretKey } = await secrets();
   if (!secretKey) throw new HttpError(503, "الدفع غير مُفعّل بعد. يرجى التواصل مع الدعم.", "payments_unconfigured");
-  return new Stripe(secretKey, { appInfo: { name: "JB AI" } });
+  return new Stripe(secretKey, { appInfo: { name: "Mohammed Tech" } });
 }
 
 export async function testStripe() {
@@ -93,7 +93,7 @@ export async function createCheckout(user: { id: string; email: string }, plan: 
           currency: plan.currency,
           unit_amount: amount,
           recurring: { interval: interval === "YEAR" ? "year" : "month" },
-          product_data: { name: `JB AI ${plan.name} (${interval === "YEAR" ? "yearly" : "monthly"})`, metadata: { planKey: plan.key } },
+          product_data: { name: `محمد | التقني — ${plan.name} (${interval === "YEAR" ? "yearly" : "monthly"})`, metadata: { planKey: plan.key } },
         },
       },
     ],

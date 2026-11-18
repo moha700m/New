@@ -20,7 +20,7 @@ export async function sendMail(to: string, subject: string, html: string, text: 
     if (process.env.NODE_ENV !== "production") console.info(`[mailer:dev] To: ${to}\nSubject: ${subject}\n${text}`);
     return { sent: false, reason: "SMTP is not configured" };
   }
-  await transport().sendMail({ from: process.env.MAIL_FROM || "JB AI <no-reply@localhost>", to, subject, html, text });
+  await transport().sendMail({ from: process.env.MAIL_FROM || "محمد التقني <no-reply@localhost>", to, subject, html, text });
   return { sent: true };
 }
 

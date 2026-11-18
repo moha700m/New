@@ -15,3 +15,11 @@ export const GET = handler(async (req: Request) => {
   });
   return json({ conversations });
 });
+
+/** Deletes every conversation of the signed-in user (stops any run still going first). */
+export const DELETE = handler(async () => {
+  const user = await requireUser();
+  await prisma.message.updateMany({ where: { status: "streaming", conversation: { userId: user.id } }, data: { stopRequested: true } });
+  const { count } = await prisma.conversation.deleteMany({ where: { userId: user.id } });
+  return json({ ok: true, deleted: count });
+});
