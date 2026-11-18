@@ -67,7 +67,7 @@ export function ModelSelector({
       <button
         className={
           uncensored
-            ? `flex max-w-[130px] items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm font-medium sm:max-w-xs ${current ? "border-rose-500/60 bg-rose-500/15 text-rose-200" : "border-rose-500/30 text-rose-300 hover:bg-rose-500/10"}`
+            ? `flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm font-medium sm:max-w-sm ${current ? "border-rose-500/60 bg-rose-500/15 text-rose-200" : "border-rose-500/30 text-rose-300 hover:bg-rose-500/10"}`
             : `flex max-w-[150px] items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm font-medium sm:max-w-xs ${current ? "border-brand-500/40 bg-ink-700/60 text-slate-100" : "border-transparent text-slate-300 hover:bg-ink-700"}`
         }
         onClick={() => setOpen((o) => !o)}
@@ -77,7 +77,23 @@ export function ModelSelector({
       >
         {uncensored ? <Flame size={15} className="shrink-0 text-rose-400" /> : <Sparkles size={15} className="shrink-0 text-brand-400" />}
         <span className="truncate">
-          {current ? <bdi>{current.name}</bdi> : uncensored ? "بدون فلترة" : models.length ? "النماذج" : "لا توجد نماذج متاحة"}
+          {uncensored ? (
+            <>
+              بدون فلترة
+              {current && (
+                <span className="hidden font-normal text-rose-200/80 sm:inline">
+                  {" · "}
+                  <bdi>{current.name}</bdi>
+                </span>
+              )}
+            </>
+          ) : current ? (
+            <bdi>{current.name}</bdi>
+          ) : models.length ? (
+            "النماذج"
+          ) : (
+            "لا توجد نماذج متاحة"
+          )}
         </span>
         <ChevronDown size={15} className={`shrink-0 ${uncensored ? "text-rose-400/80" : "text-slate-400"}`} />
       </button>
