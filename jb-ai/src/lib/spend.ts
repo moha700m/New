@@ -49,8 +49,15 @@ export async function getSpend(force = false): Promise<SpendInfo> {
     const rows: Ledger[] = [];
     let cursor: string | null = null;
     for (let i = 0; i < 8; i++) {
-      const page: { data: Ledger[]; nextCursor?: string | null } = await get(`/billing/usage-history?pageSize=500&startTimestamp=${encodeURIComponent(since)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
-      rows.push(...(page.data ?? []));
+      // Venice rejects pageSize/startTimestamp together with a cursor: follow-up pages send only the cursor
+      let page: { data: Ledger[]; nextCursor?: string | null };
+      try {
+        page = await get(cursor ? `/billing/usage-history?cursor=${encodeURIComponent(cursor)}` : `/billing/usage-history?pageSize=500&startTimestamp=${encodeURIComponent(since)}`);
+      } catch (e) {
+        if (!rows.length) throw e;
+        break; // keep what we already have rather than hiding the balance
+      }
+      rows.push(...(page.data ?? []).filter((r) => r.timestamp >= since));
       cursor = page.nextCursor ?? null;
       if (!cursor) break;
     }
