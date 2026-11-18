@@ -114,6 +114,7 @@ model Conversation {
   userId    String
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   title     String    @default("New chat")
+  agentMode Boolean   @default(false)
   modelId   String?
   model     AiModel?  @relation(fields: [modelId], references: [id], onDelete: SetNull)
   createdAt DateTime  @default(now())
@@ -136,6 +137,7 @@ model Message {
   modelName      String?
   providerName   String?
   usedFallback   Boolean      @default(false)
+  agentSteps     Json?
   createdAt      DateTime     @default(now())
   attachments    Attachment[]
 
@@ -380,4 +382,25 @@ model RateLimit {
 
   @@id([key, windowStart])
   @@index([windowStart])
+}
+
+/// Remote MCP servers the agent can use (streamable HTTP or legacy SSE). Tokens are AES-GCM encrypted like provider keys.
+model McpServer {
+  id             String    @id @default(cuid())
+  slug           String    @unique
+  name           String
+  url            String
+  transport      String    @default("auto") // auto | streamable | sse
+  authHeader     String    @default("Authorization")
+  authScheme     String    @default("Bearer")
+  tokenEncrypted String?
+  tokenLast4     String?
+  extraHeaders   Json?
+  enabled        Boolean   @default(true)
+  toolFilter     String?   // optional comma list of tool names (supports * suffix) to expose; empty = all
+  tools          Json?     // cached tools/list result
+  lastSyncAt     DateTime?
+  lastError      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 }

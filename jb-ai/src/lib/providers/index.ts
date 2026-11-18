@@ -45,3 +45,5 @@ export function getAdapter(p: Provider): ProviderAdapter {
       return isPollinations(p) ? new PollinationsAdapter(cfg) : new OpenAICompatibleAdapter(cfg);
   }
 }
+export { OpenAICompatibleAdapter } from "./openai-compatible";
+export type { ToolCompletionRequest, ToolCompletionResult } from "./openai-compatible";

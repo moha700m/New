@@ -75,17 +75,19 @@ export function ModelSelector({
   return (
     <div className="relative" ref={ref}>
       <button
-        className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm font-medium ${special ? "shrink-0 sm:max-w-sm" : "max-w-[150px] sm:max-w-xs"} ${current ? v.on : v.off}`}
+        className={`flex items-center gap-1.5 rounded-lg border px-2 py-1.5 text-sm font-medium sm:px-2.5 ${special ? "shrink-0 sm:max-w-sm" : "max-w-[130px] sm:max-w-xs"} ${current ? v.on : v.off}`}
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
         data-testid={variant === "standard" ? "model-selector" : `${variant}-selector`}
+        title={v.label}
+        aria-label={v.label}
       >
         <Icon size={15} className={`shrink-0 ${v.iconCls}`} />
         <span className="truncate">
           {special ? (
             <>
-              {v.label}
+              <span className={current ? "" : "hidden sm:inline"}>{v.label}</span>
               {current && (
                 <span className="hidden font-normal opacity-80 sm:inline">
                   {" · "}

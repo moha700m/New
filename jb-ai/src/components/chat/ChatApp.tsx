@@ -25,6 +25,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const [think, setThink] = useState(false);
   const [search, setSearch] = useState(false);
+  const [agent, setAgent] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -86,6 +87,8 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
   const reasoningAvailable = Boolean(config?.defaults.reasoning) || Boolean(current?.capabilities.reasoning);
   const searchAvailable = Boolean(current?.capabilities.webSearch);
   const searchLocked = signedIn && !me?.plan?.allowWebSearch;
+  const agentAvailable = signedIn && !current?.capabilities.imageGeneration;
+  const agentOn = agent && agentAvailable;
 
   // ---- conversation loading
   const openConversation = useCallback(
@@ -96,8 +99,9 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
       setLoadingConv(true);
       window.history.replaceState(null, "", `/c/${id}`);
       try {
-        const d = await api<{ conversation: { id: string; modelId: string | null }; messages: (UiMessage & { attachments: UiMessage["attachments"] })[] }>(`/api/conversations/${id}`);
+        const d = await api<{ conversation: { id: string; modelId: string | null; agentMode?: boolean }; messages: (UiMessage & { attachments: UiMessage["attachments"] })[] }>(`/api/conversations/${id}`);
         setMessages(d.messages.map((m) => ({ ...m, status: m.status as UiMessage["status"] })));
+        setAgent(Boolean(d.conversation.agentMode));
         stickToBottom.current = true;
       } catch (e) {
         toast((e as Error).message, "err");
@@ -119,6 +123,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
     abortRef.current?.abort();
     setActiveId(null);
     setMessages([]);
+    setAgent(false);
     setSidebarOpen(false);
     window.history.replaceState(null, "", "/");
   }
@@ -183,6 +188,14 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
             patchMessage(assistantId, (m) => ({ ...m, reasoning: (m.reasoning ?? "") + ev.text }));
           } else if (ev.type === "fallback") {
             patchMessage(assistantId, (m) => ({ ...m, usedFallback: true, modelName: ev.model?.name, notice: `النموذج الأساسي غير متاح — أجاب النموذج الاحتياطي ${ev.model?.name} (${ev.provider})` }));
+          } else if (ev.type === "agent_step") {
+            patchMessage(assistantId, (m) => {
+              const steps = [...(m.agentSteps ?? [])];
+              const i = steps.findIndex((x) => x.id === ev.step.id);
+              if (i >= 0) steps[i] = ev.step;
+              else steps.push(ev.step);
+              return { ...m, agentSteps: steps };
+            });
           } else if (ev.type === "image") {
             patchMessage(assistantId, (m) => ({ ...m, attachments: [...(m.attachments ?? []), { id: ev.attachmentId, filename: "generated", mimeType: ev.mimeType, kind: "generated-image" }] }));
           } else if (ev.type === "done") {
@@ -225,7 +238,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
       { id: "pending-user", role: "user", content: text, status: "complete", attachments: atts.map((a) => ({ ...a })) },
       { id: tempId, role: "assistant", content: "", status: "streaming" },
     ]);
-    await runChat({ conversationId: activeIdRef.current, content: text, attachmentIds: atts.map((a) => a.id), modelId: selectedModel, think, webSearch: search && searchAvailable && !searchLocked }, tempId);
+    await runChat({ conversationId: activeIdRef.current, content: text, attachmentIds: atts.map((a) => a.id), modelId: selectedModel, think, webSearch: search && searchAvailable && !searchLocked, agent: agentOn }, tempId);
   }
 
   async function regenerate() {
@@ -233,7 +246,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
     const lastUserIdx = messages.map((m) => m.role).lastIndexOf("user");
     const tempId = `pending-assistant-${Date.now()}`;
     setMessages((list) => [...list.slice(0, lastUserIdx + 1), { id: tempId, role: "assistant", content: "", status: "streaming" }]);
-    await runChat({ conversationId: activeId, regenerate: true, modelId: selectedModel, think, webSearch: search && searchAvailable && !searchLocked }, tempId);
+    await runChat({ conversationId: activeId, regenerate: true, modelId: selectedModel, think, webSearch: search && searchAvailable && !searchLocked, agent: agentOn }, tempId);
   }
 
   async function editMessage(id: string, content: string) {
@@ -241,7 +254,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
     const idx = messages.findIndex((m) => m.id === id);
     const tempId = `pending-assistant-${Date.now()}`;
     setMessages((list) => [...list.slice(0, idx), { ...list[idx]!, content }, { id: tempId, role: "assistant", content: "", status: "streaming" }]);
-    await runChat({ conversationId: activeId, editMessageId: id, content, modelId: selectedModel, think, webSearch: search && searchAvailable && !searchLocked }, tempId);
+    await runChat({ conversationId: activeId, editMessageId: id, content, modelId: selectedModel, think, webSearch: search && searchAvailable && !searchLocked, agent: agentOn }, tempId);
   }
 
   async function rename(id: string, title: string) {
@@ -304,8 +317,10 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
       searchLocked={searchLocked}
       uploadsAllowed={me?.plan?.allowUploads ?? false}
       onRequireAuth={signedIn ? undefined : requireAuth}
-      placeholder={current?.capabilities.imageGeneration ? `صِف الصورة التي تريد إنشاءها (${current.name})` : "اسأل أي شيء"}
+      placeholder={current?.capabilities.imageGeneration ? `صِف الصورة التي تريد إنشاءها (${current.name})` : agentOn ? "وش المهمة؟ الوكيل يستخدم GitHub و MCP والويب والصور" : "اسأل أي شيء"}
       imageMode={Boolean(current?.capabilities.imageGeneration)}
+      agent={agentOn}
+      setAgent={agentAvailable ? setAgent : undefined}
       onToggleImage={signedIn && (imageDefault || current?.capabilities.imageGeneration) ? toggleImageMode : undefined}
       autoFocus
       disabled={config?.site.maintenanceMode}

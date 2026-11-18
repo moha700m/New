@@ -1,5 +1,5 @@
 "use client";
-import { ArrowUp, FileText, Globe, ImageIcon, Lightbulb, Loader2, Plus, Square, X } from "lucide-react";
+import { ArrowUp, Bot, FileText, Globe, ImageIcon, Lightbulb, Loader2, Plus, Square, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useToast } from "../ui/Toast";
 
@@ -29,6 +29,8 @@ export function Composer(props: {
   autoFocus?: boolean;
   imageMode?: boolean;
   onToggleImage?: () => void;
+  agent?: boolean;
+  setAgent?: (v: boolean) => void;
 }) {
   const [text, setText] = useState("");
   const [atts, setAtts] = useState<PendingAttachment[]>([]);
@@ -134,6 +136,17 @@ export function Composer(props: {
             data-testid="image-mode"
           >
             <ImageIcon size={16} /> <span className="hidden sm:inline">صورة</span>
+          </button>
+        )}
+        {props.setAgent && (
+          <button
+            className={`btn h-9 px-2.5 ${props.agent ? "bg-sky-500/20 text-sky-300 ring-1 ring-sky-500/40" : "text-slate-300 hover:bg-ink-700"}`}
+            onClick={() => props.setAgent!(!props.agent)}
+            aria-pressed={props.agent}
+            title={props.agent ? "وضع الوكيل شغّال: يستخدم الأدوات (GitHub و MCP والويب والصور) بخطوات متعددة" : "شغّل وضع الوكيل"}
+            data-testid="agent-mode"
+          >
+            <Bot size={16} /> <span className={props.agent ? "inline" : "hidden sm:inline"}>وكيل</span>
           </button>
         )}
         {props.thinkAvailable && (

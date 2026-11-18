@@ -13,6 +13,20 @@ import {
   type TestResult,
 } from "./types";
 
+export interface ToolCompletionRequest {
+  model: string;
+  messages: Record<string, unknown>[];
+  tools?: { type: "function"; function: { name: string; description: string; parameters: Record<string, unknown> } }[];
+  maxTokens?: number;
+  signal: AbortSignal;
+}
+export interface ToolCompletionResult {
+  content: string;
+  reasoning: string;
+  toolCalls: { id: string; name: string; arguments: string }[];
+  usage: { promptTokens?: number; completionTokens?: number; costUsd?: number };
+}
+
 export function toOpenAIMessages(messages: ChatMessageInput[]) {
   return messages.map((m) => {
     if (m.role === "user" && m.images?.length) {
@@ -148,6 +162,47 @@ export class OpenAICompatibleAdapter implements ProviderAdapter {
       }
     }
     for (const part of splitter.flush()) yield part;
+  }
+
+  /**
+   * One non-streamed completion with OpenAI-style function calling (used by agent mode).
+   * `messages` are raw OpenAI chat messages (may include assistant tool_calls and role:"tool" results).
+   */
+  async completeWithTools(req: ToolCompletionRequest): Promise<ToolCompletionResult> {
+    const body: Record<string, unknown> = {
+      model: req.model,
+      messages: req.messages,
+      stream: false,
+      ...(req.tools?.length ? { tools: req.tools, tool_choice: "auto" } : {}),
+      ...(req.maxTokens ? { max_tokens: req.maxTokens } : {}),
+      ...this.extraChatBody({ model: req.model, messages: [], signal: req.signal, webSearch: false }),
+    };
+    const res = await providerFetch(this.cfg, joinUrl(this.cfg.baseUrl, "/chat/completions"), {
+      method: "POST",
+      headers: this.headers(),
+      body: JSON.stringify(body),
+      signal: req.signal,
+    });
+    const j: any = await res.json();
+    if (j?.error) throw new ProviderError(`${this.cfg.name}: ${j.error.message ?? JSON.stringify(j.error)}`, 502, true, false);
+    const msg = j?.choices?.[0]?.message ?? {};
+    let content = "";
+    let reasoning = typeof msg.reasoning_content === "string" ? msg.reasoning_content : typeof msg.reasoning === "string" ? msg.reasoning : "";
+    const splitter = new ThinkTagSplitter();
+    for (const part of [...splitter.push(typeof msg.content === "string" ? msg.content : ""), ...splitter.flush()]) {
+      if (part.type === "text") content += part.text;
+      else reasoning += part.text;
+    }
+    const toolCalls = (Array.isArray(msg.tool_calls) ? msg.tool_calls : [])
+      .filter((c: any) => c?.function?.name)
+      .map((c: any, i: number) => ({ id: String(c.id || `call_${Date.now()}_${i}`), name: String(c.function.name), arguments: typeof c.function.arguments === "string" ? c.function.arguments : JSON.stringify(c.function.arguments ?? {}) }));
+    const u = j?.usage ?? {};
+    return {
+      content,
+      reasoning,
+      toolCalls,
+      usage: { promptTokens: u.prompt_tokens, completionTokens: u.completion_tokens, costUsd: typeof u.cost === "number" ? u.cost : undefined },
+    };
   }
 
   async generateImage(req: ImageRequest): Promise<ImageResult> {

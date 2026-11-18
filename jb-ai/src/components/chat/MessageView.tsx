@@ -1,4 +1,5 @@
 "use client";
+import { AgentSteps, type UiAgentStep } from "./AgentSteps";
 import { AlertTriangle, Brain, Check, ChevronDown, Copy, FileText, Pencil, RefreshCw, Shuffle } from "lucide-react";
 import { useState } from "react";
 import { Markdown } from "./Markdown";
@@ -23,6 +24,7 @@ export interface UiMessage {
   usedFallback?: boolean;
   notice?: string | null;
   attachments?: UiAttachment[];
+  agentSteps?: UiAgentStep[] | null;
 }
 
 function Attachments({ list }: { list: UiAttachment[] }) {
@@ -122,12 +124,13 @@ export function MessageView({ m, isLast, canAct, onRegenerate, onEdit }: { m: Ui
           )}
         </div>
       )}
+      {m.agentSteps?.length ? <AgentSteps steps={m.agentSteps} running={streaming && !m.content} /> : null}
       {m.attachments?.length ? <Attachments list={m.attachments} /> : null}
       {m.content ? (
         <div dir="auto" className={streaming ? "typing-cursor" : ""}>
           <Markdown text={m.content} />
         </div>
-      ) : streaming && !m.reasoning ? (
+      ) : streaming && !m.reasoning && !m.agentSteps?.length ? (
         <div className="flex h-7 items-center gap-1" aria-label="جارٍ التوليد">
           {[0, 1, 2].map((i) => (
             <span key={i} className="h-2 w-2 animate-bounce rounded-full bg-slate-400" style={{ animationDelay: `${i * 0.15}s` }} />

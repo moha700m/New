@@ -7,6 +7,7 @@ import { HttpError } from "./http";
 import { enforceQuota, planAllowsModel } from "./plans";
 import { getAdapter, ProviderError, type ChatImage, type ChatMessageInput } from "./providers";
 import type { SystemSettings } from "./settings";
+import { runAgent } from "./agent/run";
 
 export interface ChatInput {
   conversationId?: string | null;
@@ -17,6 +18,8 @@ export interface ChatInput {
   webSearch: boolean;
   regenerate: boolean;
   editMessageId?: string | null;
+  /** Agent mode: multi-step tool loop (MCP, GitHub, web, images). */
+  agent?: boolean;
 }
 
 type Emit = (event: Record<string, unknown>) => void;
@@ -97,10 +100,13 @@ export async function prepareChat(userId: string, plan: Plan, input: ChatInput, 
   });
 
   const webSearch = input.webSearch && plan.allowWebSearch;
+  const agent = Boolean(input.agent) && role !== "image";
 
   // ----- persist the user turn
   if (!conversation) {
-    conversation = await prisma.conversation.create({ data: { userId, title: titleFrom(input.content || attachments[0]?.filename || "محادثة جديدة"), modelId: targets[0]!.model.id } });
+    conversation = await prisma.conversation.create({ data: { userId, title: titleFrom(input.content || attachments[0]?.filename || "محادثة جديدة"), modelId: targets[0]!.model.id, agentMode: Boolean(input.agent) } });
+  } else if (input.agent !== undefined && conversation.agentMode !== Boolean(input.agent)) {
+    conversation = await prisma.conversation.update({ where: { id: conversation.id }, data: { agentMode: Boolean(input.agent) } });
   }
   let userMessageId: string | null = null;
   if (input.editMessageId) {
@@ -148,7 +154,7 @@ export async function prepareChat(userId: string, plan: Plan, input: ChatInput, 
   }
   const lastUserText = input.content || history.filter((h) => h.role === "user").pop()?.content || "";
 
-  return { conversation, userMessageId, targets, role, webSearch, contextMessages, lastUserText, isNew: !input.conversationId };
+  return { conversation, userMessageId, targets, role, webSearch, agent, contextMessages, lastUserText, isNew: !input.conversationId };
 }
 
 /** Executes the prepared request against the routed provider(s), streaming events to the client. */
@@ -172,6 +178,7 @@ export async function executeChat(
     model: { id: targets[0]!.model.id, name: targets[0]!.model.displayName },
     notice: targets[0]!.reason,
     webSearch: prep.webSearch,
+    agent: prep.agent,
   });
 
   let text = "";
@@ -203,6 +210,22 @@ export async function executeChat(
           }
           const perImage = (target.model.extraCapabilities as { pricePerImageUsd?: number } | null)?.pricePerImageUsd;
           usage = { costUsd: result.costUsd ?? (perImage != null ? perImage * result.images.length : undefined) };
+        } else if (prep.agent) {
+          const r = await runAgent({
+            model: target.model,
+            contextMessages: prep.contextMessages,
+            userId,
+            assistantMessageId: assistant.id,
+            emit,
+            signal,
+            onProgress: () => {
+              produced = true;
+            },
+          });
+          produced = true;
+          text = r.text;
+          reasoning = r.reasoning;
+          usage = r.usage;
         } else {
           const stream = adapter.chat({
             model: target.model.modelId,

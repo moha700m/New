@@ -19,6 +19,7 @@ const schema = z.object({
   webSearch: z.boolean().default(false),
   regenerate: z.boolean().default(false),
   editMessageId: z.string().max(40).nullish(),
+  agent: z.boolean().optional(),
 });
 
 /**
@@ -37,6 +38,7 @@ export async function POST(req: Request) {
     if (await needsVerification(user)) throw new HttpError(403, "يرجى تأكيد بريدك الإلكتروني قبل بدء المحادثة.", "email_unverified");
     input = await parseBody(req, schema);
     if (!isOwnerAccount(user)) await rateLimit(`chat:${user.id}`, settings.chatRateLimitPerMinute, 60_000);
+    if (input.agent && !isOwnerAccount(user) && user.role !== "ADMIN" && user.role !== "OWNER") throw new HttpError(403, "وضع الوكيل متاح للمالك فقط.", "agent_owner_only");
     const { plan } = await getUserPlan(user.id);
     prep = await prepareChat(user.id, plan, input, settings);
   } catch (e) {

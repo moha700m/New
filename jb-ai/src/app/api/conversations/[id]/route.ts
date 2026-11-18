@@ -21,7 +21,7 @@ export const GET = handler(async (_req: Request, ctx: Ctx) => {
     orderBy: { createdAt: "asc" },
     include: { attachments: { select: { id: true, filename: true, mimeType: true, size: true, kind: true } } },
   });
-  return json({ conversation: { id: c.id, title: c.title, modelId: c.modelId }, messages });
+  return json({ conversation: { id: c.id, title: c.title, modelId: c.modelId, agentMode: c.agentMode }, messages });
 });
 
 export const PATCH = handler(async (req: Request, ctx: Ctx) => {
