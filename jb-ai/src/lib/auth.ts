@@ -2,7 +2,7 @@ import "server-only";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import type { Role, TokenType, User } from "@prisma/client";
-import { isOwnerAccount, isPrivateMode } from "./access";
+import { isOwnerAccount, isPrivateMode, ownerEmails } from "./access";
 import { prisma } from "./db";
 import { randomToken, sha256 } from "./crypto";
 import { HttpError } from "./http";
@@ -137,6 +137,5 @@ export async function sendPasswordResetEmail(user: { id: string; email: string }
 }
 
 export function ownerEmailMatches(email: string) {
-  const owner = process.env.OWNER_EMAIL?.trim().toLowerCase();
-  return Boolean(owner && owner === email.toLowerCase());
+  return ownerEmails().includes(email.toLowerCase());
 }

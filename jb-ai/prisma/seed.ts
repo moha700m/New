@@ -215,9 +215,9 @@ async function syncVeniceCatalog(providerId: string, baseUrl: string) {
 /* Private mode: make sure the owner account has the OWNER role, block the automated test accounts,
  * and print an access report (non-owner accounts are blocked at runtime by PRIVATE_MODE, not deleted). */
 async function privateModeHousekeeping() {
-  const ownerEmail = process.env.OWNER_EMAIL?.trim().toLowerCase();
+  const owners = (process.env.OWNER_EMAIL ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
   const priv = (process.env.PRIVATE_MODE ?? "on").trim().toLowerCase() !== "off";
-  if (ownerEmail) await prisma.user.updateMany({ where: { email: ownerEmail, role: { not: "OWNER" } }, data: { role: "OWNER" } });
+  if (owners.length) await prisma.user.updateMany({ where: { email: { in: owners }, role: { not: "OWNER" } }, data: { role: "OWNER" } });
   const test = { email: { startsWith: "grokbot-test-", endsWith: "@example.com" } };
   const blocked = await prisma.user.updateMany({ where: { ...test, disabled: false }, data: { disabled: true } });
   await prisma.session.deleteMany({ where: { user: test } });
@@ -226,9 +226,11 @@ async function privateModeHousekeeping() {
     orderBy: { createdAt: "asc" },
   });
   const top = await prisma.plan.findFirst({ where: { active: true }, orderBy: [{ sortOrder: "desc" }, { priceMonthlyCents: "desc" }] });
+  const missing = owners.filter((o) => !users.some((u) => u.email.toLowerCase() === o));
+  if (missing.length) console.log(`[access] WARNING: OWNER_EMAIL account(s) not registered yet: ${missing.join(", ")}`);
   console.log(`[access] PRIVATE_MODE=${priv ? "on" : "off"}; test accounts newly disabled: ${blocked.count}; users: ${users.length}`);
   for (const u of users) {
-    const isOwner = u.role === "OWNER" || u.email.toLowerCase() === ownerEmail;
+    const isOwner = u.role === "OWNER" || owners.includes(u.email.toLowerCase());
     const access = isOwner ? `OWNER -> plan "${top?.key}" unlimited (no daily/monthly/token caps, all models, all features)` : priv || u.disabled ? "BLOCKED" : "allowed";
     console.log(`[access] ${u.email} role=${u.role} disabled=${u.disabled} created=${u.createdAt.toISOString()} sub=${u.subscription ? `${u.subscription.plan.key}/${u.subscription.status}` : "none"} => ${access}`);
   }

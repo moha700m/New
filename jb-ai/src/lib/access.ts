@@ -9,7 +9,14 @@ export function isPrivateMode() {
   return (process.env.PRIVATE_MODE ?? "on").trim().toLowerCase() !== "off";
 }
 
+/** OWNER_EMAIL may hold one address or several separated by commas. */
+export function ownerEmails(): string[] {
+  return (process.env.OWNER_EMAIL ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+}
+
 export function isOwnerAccount(u: { role: string; email: string }) {
-  const owner = process.env.OWNER_EMAIL?.trim().toLowerCase();
-  return u.role === "OWNER" || Boolean(owner && owner === u.email.toLowerCase());
+  return u.role === "OWNER" || ownerEmails().includes(u.email.toLowerCase());
 }
