@@ -7,7 +7,7 @@ import "./globals.css";
 const plex = IBM_Plex_Sans_Arabic({ subsets: ["arabic", "latin"], weight: ["400", "500", "600", "700"], display: "swap", variable: "--font-plex" });
 
 export const metadata: Metadata = {
-  title: { default: "JB AI — اسأل أي شي", template: "%s · JB AI" },
+  title: { default: "JB AI — اسأل أي شيء", template: "%s · JB AI" },
   description: "JB AI: دردش مع أقوى نماذج الذكاء الاصطناعي. مساعدة في البرمجة والأسئلة التقنية وأكثر.",
 };
 export const viewport: Viewport = { themeColor: "#050812", width: "device-width", initialScale: 1, viewportFit: "cover" };
