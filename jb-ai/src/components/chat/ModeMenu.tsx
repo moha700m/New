@@ -79,7 +79,7 @@ export function ModeMenu({ modes, active, onPick, disabled }: { modes: ModeOptio
                   <span className="block text-sm font-medium text-slate-100">
                     {meta.label} <span className="text-[11px] font-normal text-slate-500">· {meta.hint}</span>
                   </span>
-                  <span dir="ltr" className="block truncate text-start text-[11.5px] text-slate-400">{m.modelName}</span>
+                  <span dir="ltr" className="block truncate text-right text-[11.5px] text-slate-400">{m.modelName}</span>
                 </span>
                 {on && <Check size={16} className="shrink-0 text-sky-300" />}
               </button>
