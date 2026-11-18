@@ -1,11 +1,13 @@
 "use client";
-import { Brain, Check, ChevronDown, Code2, Eye, Globe, ImageIcon, Lock, Sparkles } from "lucide-react";
+import { Brain, Check, ChevronDown, Code2, Eye, Flame, Globe, ImageIcon, Lock, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { LiveModel } from "../useLiveConfig";
 
-const GROUPS: { key: LiveModel["category"] | "UNCENSORED"; label: string }[] = [
-  { key: "UNCENSORED", label: "بدون فلترة" },
+/** Uncensored models live in their own picker («بدون فلترة»), separate from the regular list. */
+export const isUncensoredModel = (m: LiveModel) => Boolean(m.capabilities.uncensored);
+
+const GROUPS: { key: LiveModel["category"]; label: string }[] = [
   { key: "TEXT", label: "عام" },
   { key: "REASONING", label: "تفكير واستدلال" },
   { key: "CODE", label: "برمجة" },
@@ -26,11 +28,28 @@ export function CapabilityIcons({ m }: { m: LiveModel }) {
   );
 }
 
-export function ModelSelector({ models, value, onChange, defaultId, signedIn }: { models: LiveModel[]; value: string | null; onChange: (id: string) => void; defaultId: string | null; signedIn: boolean }) {
+export function ModelSelector({
+  models,
+  value,
+  onChange,
+  defaultId,
+  signedIn,
+  variant = "standard",
+}: {
+  models: LiveModel[];
+  value: string | null;
+  onChange: (id: string) => void;
+  defaultId: string | null;
+  signedIn: boolean;
+  variant?: "standard" | "uncensored";
+}) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const ref = useRef<HTMLDivElement>(null);
-  const current = models.find((m) => m.id === value) ?? models.find((m) => m.id === defaultId);
+  const uncensored = variant === "uncensored";
+  // `models` is already the list for this picker; the active model shows here only when it belongs to it.
+  const active = value ?? defaultId;
+  const current = models.find((m) => m.id === active);
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => ref.current && !ref.current.contains(e.target as Node) && setOpen(false);
@@ -46,27 +65,39 @@ export function ModelSelector({ models, value, onChange, defaultId, signedIn }: 
   return (
     <div className="relative" ref={ref}>
       <button
-        className="flex max-w-[220px] items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-slate-200 hover:bg-ink-700 sm:max-w-xs"
+        className={
+          uncensored
+            ? `flex max-w-[130px] items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm font-medium sm:max-w-xs ${current ? "border-rose-500/60 bg-rose-500/15 text-rose-200" : "border-rose-500/30 text-rose-300 hover:bg-rose-500/10"}`
+            : `flex max-w-[150px] items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm font-medium sm:max-w-xs ${current ? "border-brand-500/40 bg-ink-700/60 text-slate-100" : "border-transparent text-slate-300 hover:bg-ink-700"}`
+        }
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        data-testid="model-selector"
+        data-testid={uncensored ? "uncensored-selector" : "model-selector"}
       >
-        <Sparkles size={15} className="shrink-0 text-brand-400" />
-        <span className="truncate">{current ? <bdi>{current.name}</bdi> : models.length ? "اختر نموذجًا" : "لا توجد نماذج متاحة"}</span>
-        <ChevronDown size={15} className="shrink-0 text-slate-400" />
+        {uncensored ? <Flame size={15} className="shrink-0 text-rose-400" /> : <Sparkles size={15} className="shrink-0 text-brand-400" />}
+        <span className="truncate">
+          {current ? <bdi>{current.name}</bdi> : uncensored ? "بدون فلترة" : models.length ? "النماذج" : "لا توجد نماذج متاحة"}
+        </span>
+        <ChevronDown size={15} className={`shrink-0 ${uncensored ? "text-rose-400/80" : "text-slate-400"}`} />
       </button>
       {open && (
-        <div className="absolute start-0 top-full z-40 mt-1 w-[min(92vw,380px)] overflow-hidden rounded-xl border border-ink-600 bg-ink-900 shadow-2xl">
+        <div
+          className={`fixed inset-x-2 top-14 z-40 overflow-hidden rounded-xl border bg-ink-900 shadow-2xl sm:absolute sm:inset-x-auto sm:start-0 sm:top-full sm:mt-1 sm:w-[380px] ${uncensored ? "border-rose-500/40" : "border-ink-600"}`}
+        >
+          {uncensored && (
+            <div className="flex items-center gap-2 border-b border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+              <Flame size={14} className="shrink-0" />
+              <span>نماذج بدون فلترة — ترد بدون قيود المحتوى المعتادة ({models.length} نموذج)</span>
+            </div>
+          )}
           <div className="border-b border-ink-700 p-2">
-            <input className="input py-1.5" placeholder="ابحث في النماذج…" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
+            <input className="input py-1.5" placeholder={uncensored ? "ابحث في النماذج بدون فلترة…" : "ابحث في النماذج…"} value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
           </div>
           <div className="max-h-[60vh] overflow-y-auto p-1.5" role="listbox">
             {!filtered.length && <p className="p-3 text-sm text-slate-400">لا توجد نماذج مطابقة.</p>}
             {GROUPS.map((g) => {
-              const list = filtered.filter((m) =>
-                g.key === "UNCENSORED" ? Boolean(m.capabilities.uncensored) && m.category !== "IMAGE" : m.category === g.key && !(m.capabilities.uncensored && m.category !== "IMAGE"),
-              );
+              const list = filtered.filter((m) => m.category === g.key);
               if (!list.length) return null;
               return (
                 <div key={g.key} className="mb-1">
@@ -99,7 +130,7 @@ export function ModelSelector({ models, value, onChange, defaultId, signedIn }: 
                             <Lock size={10} /> ترقية
                           </Link>
                         ) : m.id === current?.id ? (
-                          <Check size={16} className="mt-0.5 text-brand-400" />
+                          <Check size={16} className={`mt-0.5 ${uncensored ? "text-rose-400" : "text-brand-400"}`} />
                         ) : null}
                       </button>
                     );

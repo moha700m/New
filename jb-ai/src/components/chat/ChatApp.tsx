@@ -8,7 +8,7 @@ import { useToast } from "../ui/Toast";
 import { useLiveConfig } from "../useLiveConfig";
 import { Composer, type PendingAttachment } from "./Composer";
 import { MessageView, type UiMessage } from "./MessageView";
-import { ModelSelector } from "./ModelSelector";
+import { isUncensoredModel, ModelSelector } from "./ModelSelector";
 import { Sidebar, type ConvItem, type MeInfo } from "./Sidebar";
 
 const MODEL_KEY = "jb.selectedModel";
@@ -320,7 +320,12 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
           <button className="btn-ghost p-2 md:hidden" onClick={() => setSidebarOpen(true)} aria-label="فتح القائمة">
             <Menu size={20} />
           </button>
-          <ModelSelector models={models} value={selectedModel} onChange={chooseModel} defaultId={defaultId} signedIn={signedIn} />
+          <div className="flex min-w-0 items-center gap-1.5">
+            <ModelSelector models={models.filter((m) => !isUncensoredModel(m))} value={selectedModel} onChange={chooseModel} defaultId={defaultId} signedIn={signedIn} />
+            {models.some(isUncensoredModel) && (
+              <ModelSelector variant="uncensored" models={models.filter(isUncensoredModel)} value={selectedModel} onChange={chooseModel} defaultId={defaultId} signedIn={signedIn} />
+            )}
+          </div>
           <span className="hidden items-center gap-1 text-[11px] text-slate-500 sm:flex" title={connected ? "متصل بالتحديثات المباشرة" : "جارٍ إعادة الاتصال بالتحديثات المباشرة"}>
             {connected ? <Wifi size={12} className="text-emerald-400" /> : <WifiOff size={12} />}
           </span>
