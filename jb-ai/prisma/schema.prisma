@@ -1,0 +1,373 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+  OWNER
+}
+
+enum TokenType {
+  EMAIL_VERIFY
+  PASSWORD_RESET
+}
+
+enum ProviderType {
+  VENICE
+  OPENAI_COMPATIBLE
+  ANTHROPIC
+}
+
+enum HealthStatus {
+  UNKNOWN
+  HEALTHY
+  DEGRADED
+  DOWN
+}
+
+enum ModelCategory {
+  TEXT
+  REASONING
+  CODE
+  VISION
+  IMAGE
+}
+
+enum ModelSource {
+  SYNCED
+  MANUAL
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIALING
+  PAST_DUE
+  CANCELED
+  EXPIRED
+  INCOMPLETE
+}
+
+enum BillingInterval {
+  MONTH
+  YEAR
+}
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  passwordHash    String
+  name            String?
+  role            Role      @default(USER)
+  emailVerifiedAt DateTime?
+  disabled        Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  sessions      Session[]
+  tokens        VerificationToken[]
+  conversations Conversation[]
+  attachments   Attachment[]
+  subscription  Subscription?
+  payments      Payment[]
+  usage         UsageRecord[]
+  auditLogs     AuditLog[]
+  billingCustomerId String? @unique
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  tokenHash  String   @unique
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  userAgent  String?
+  ip         String?
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      TokenType
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, type])
+}
+
+model Conversation {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String    @default("New chat")
+  modelId   String?
+  model     AiModel?  @relation(fields: [modelId], references: [id], onDelete: SetNull)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  messages  Message[]
+
+  @@index([userId, updatedAt])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String // "user" | "assistant" | "system"
+  content        String       @default("")
+  reasoning      String?
+  status         String       @default("complete") // complete | streaming | stopped | error
+  error          String?
+  modelKey       String?
+  modelName      String?
+  providerName   String?
+  usedFallback   Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  attachments    Attachment[]
+
+  @@index([conversationId, createdAt])
+}
+
+model Attachment {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messageId String?
+  message   Message? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  filename  String
+  mimeType  String
+  size      Int
+  kind      String // image | text | generated-image
+  data      Bytes
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([messageId])
+}
+
+model Provider {
+  id               String       @id @default(cuid())
+  slug             String       @unique
+  name             String
+  type             ProviderType
+  baseUrl          String
+  apiKeyEncrypted  String?
+  apiKeyLast4      String?
+  authHeader       String       @default("Authorization")
+  authScheme       String       @default("Bearer")
+  extraHeaders     Json?
+  enabled          Boolean      @default(true)
+  priority         Int          @default(100)
+  timeoutMs        Int          @default(120000)
+  healthStatus     HealthStatus @default(UNKNOWN)
+  healthLatencyMs  Int?
+  lastHealthAt     DateTime?
+  lastHealthError  String?
+  lastSyncAt       DateTime?
+  lastSyncStatus   String?
+  lastSyncError    String?
+  lastSyncCount    Int?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  models           AiModel[]
+  usage            UsageRecord[]
+}
+
+model AiModel {
+  id                String        @id @default(cuid())
+  providerId        String
+  provider          Provider      @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  modelId           String
+  displayName       String
+  description       String?
+  category          ModelCategory @default(TEXT)
+  enabled           Boolean       @default(false)
+  sortOrder         Int           @default(1000)
+  source            ModelSource   @default(SYNCED)
+  inCatalog         Boolean       @default(true)
+  offline           Boolean       @default(false)
+  supportsText      Boolean       @default(true)
+  supportsStreaming Boolean       @default(true)
+  supportsVision    Boolean       @default(false)
+  supportsTools     Boolean       @default(false)
+  supportsWebSearch Boolean       @default(false)
+  supportsReasoning Boolean       @default(false)
+  supportsStructuredOutput Boolean @default(false)
+  supportsImageGeneration  Boolean @default(false)
+  supportsCode      Boolean       @default(false)
+  extraCapabilities Json?
+  contextLength     Int?
+  maxOutputTokens   Int?
+  inputPricePerM    Float?
+  outputPricePerM   Float?
+  rawMetadata       Json?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  plans         PlanModel[]
+  conversations Conversation[]
+  usage         UsageRecord[]
+
+  @@unique([providerId, modelId])
+  @@index([enabled, sortOrder])
+}
+
+model Plan {
+  id                  String   @id @default(cuid())
+  key                 String   @unique
+  name                String
+  description         String?
+  features            Json?
+  priceMonthlyCents   Int      @default(0)
+  priceYearlyCents    Int      @default(0)
+  currency            String   @default("usd")
+  dailyMessageLimit   Int?
+  monthlyMessageLimit Int?
+  monthlyTokenLimit   Int?
+  maxUploadMb         Int      @default(5)
+  allowUploads        Boolean  @default(true)
+  allowWebSearch      Boolean  @default(false)
+  allowImageGeneration Boolean @default(false)
+  allowAllModels      Boolean  @default(false)
+  isDefault           Boolean  @default(false)
+  active              Boolean  @default(true)
+  sortOrder           Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  models        PlanModel[]
+  subscriptions Subscription[]
+}
+
+model PlanModel {
+  planId  String
+  plan    Plan    @relation(fields: [planId], references: [id], onDelete: Cascade)
+  modelId String
+  model   AiModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
+
+  @@id([planId, modelId])
+}
+
+model Subscription {
+  id                     String             @id @default(cuid())
+  userId                 String             @unique
+  user                   User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId                 String
+  plan                   Plan               @relation(fields: [planId], references: [id])
+  status                 SubscriptionStatus
+  interval               BillingInterval    @default(MONTH)
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  cancelAtPeriodEnd      Boolean            @default(false)
+  provider               String             @default("stripe")
+  providerSubscriptionId String?            @unique
+  providerCustomerId     String?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+}
+
+model Payment {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider          String   @default("stripe")
+  providerPaymentId String   @unique
+  amountCents       Int
+  currency          String
+  status            String
+  description       String?
+  planKey           String?
+  createdAt         DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model WebhookEvent {
+  id          String   @id
+  provider    String
+  type        String
+  processedAt DateTime @default(now())
+  outcome     String?
+}
+
+model UsageRecord {
+  id               String    @id @default(cuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversationId   String?
+  providerId       String?
+  provider         Provider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  modelRowId       String?
+  model            AiModel?  @relation(fields: [modelRowId], references: [id], onDelete: SetNull)
+  modelKey         String
+  kind             String    @default("chat") // chat | image | test
+  promptTokens     Int?
+  completionTokens Int?
+  totalTokens      Int?
+  costUsd          Float?
+  costSource       String? // provider | estimated
+  status           String // success | error | stopped
+  errorMessage     String?
+  latencyMs        Int?
+  usedFallback     Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+  @@index([providerId, createdAt])
+}
+
+model RoutingConfig {
+  id                     String   @id @default("global")
+  defaultProviderId      String?
+  defaultTextModelId     String?
+  defaultReasoningModelId String?
+  defaultCodingModelId   String?
+  defaultVisionModelId   String?
+  defaultImageModelId    String?
+  fallbackEnabled        Boolean  @default(true)
+  fallbackProviderId     String?
+  fallbackModelId        String?
+  updatedAt              DateTime @updatedAt
+}
+
+model Setting {
+  key       String   @id
+  value     Json
+  secret    Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+}
+
+model ConfigState {
+  id        String   @id @default("global")
+  version   Int      @default(1)
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorEmail String?
+  action     String
+  entityType String?
+  entityId   String?
+  details    Json?
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+}

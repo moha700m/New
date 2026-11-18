@@ -1,0 +1,155 @@
+"use client";
+import { AlertTriangle, Brain, Check, ChevronDown, Copy, FileText, Pencil, RefreshCw, Shuffle } from "lucide-react";
+import { useState } from "react";
+import { Markdown } from "./Markdown";
+
+export interface UiAttachment {
+  id: string;
+  filename: string;
+  mimeType: string;
+  kind: string;
+  previewUrl?: string;
+}
+
+export interface UiMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  reasoning?: string | null;
+  status: "complete" | "streaming" | "stopped" | "error";
+  error?: string | null;
+  modelName?: string | null;
+  providerName?: string | null;
+  usedFallback?: boolean;
+  notice?: string | null;
+  attachments?: UiAttachment[];
+}
+
+function Attachments({ list }: { list: UiAttachment[] }) {
+  return (
+    <div className="mb-2 flex flex-wrap gap-2">
+      {list.map((a) =>
+        a.kind === "image" || a.kind === "generated-image" ? (
+          <a key={a.id} href={`/api/attachments/${a.id}`} target="_blank" rel="noreferrer">
+            <img src={a.previewUrl ?? `/api/attachments/${a.id}`} alt={a.filename} className={`rounded-xl border border-ink-600 object-cover ${a.kind === "generated-image" ? "max-h-[420px] max-w-full" : "h-28 w-28"}`} />
+          </a>
+        ) : (
+          <a key={a.id} href={`/api/attachments/${a.id}`} className="flex items-center gap-2 rounded-lg border border-ink-600 bg-ink-800 px-2.5 py-1.5 text-xs hover:bg-ink-700">
+            <FileText size={15} className="text-slate-400" /> {a.filename}
+          </a>
+        ),
+      )}
+    </div>
+  );
+}
+
+export function MessageView({ m, isLast, canAct, onRegenerate, onEdit }: { m: UiMessage; isLast: boolean; canAct: boolean; onRegenerate: () => void; onEdit: (content: string) => void }) {
+  const [copied, setCopied] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(m.content);
+  const [showReasoning, setShowReasoning] = useState(false);
+
+  if (m.role === "user") {
+    return (
+      <div className="group flex flex-col items-end" data-testid="msg-user">
+        {m.attachments?.length ? <Attachments list={m.attachments} /> : null}
+        {editing ? (
+          <div className="w-full max-w-[85%] rounded-2xl border border-ink-500 bg-ink-800 p-3">
+            <textarea className="input min-h-[90px] resize-y border-none bg-transparent p-0 focus:ring-0" value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus />
+            <div className="mt-2 flex justify-end gap-2">
+              <button className="btn-ghost" onClick={() => setEditing(false)}>
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                disabled={!draft.trim()}
+                onClick={() => {
+                  setEditing(false);
+                  onEdit(draft.trim());
+                }}
+              >
+                Save & submit
+              </button>
+            </div>
+          </div>
+        ) : (
+          m.content && <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-ink-700 px-4 py-2.5 text-[15px] leading-7">{m.content}</div>
+        )}
+        {!editing && canAct && (
+          <div className="mt-1 flex gap-1 opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100">
+            <button className="btn-ghost p-1.5" onClick={() => { setDraft(m.content); setEditing(true); }} aria-label="Edit message" title="Edit">
+              <Pencil size={14} />
+            </button>
+            <button className="btn-ghost p-1.5" onClick={() => navigator.clipboard.writeText(m.content)} aria-label="Copy message" title="Copy">
+              <Copy size={14} />
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const streaming = m.status === "streaming";
+  return (
+    <div className="group" data-testid="msg-assistant">
+      {(m.notice || m.usedFallback) && (
+        <div className="mb-2 flex items-center gap-1.5 text-xs text-amber-300/90">
+          <Shuffle size={13} /> {m.notice || `Answered by fallback model ${m.modelName ?? ""}`}
+        </div>
+      )}
+      {m.reasoning && (
+        <div className="mb-3">
+          <button className="flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-slate-200" onClick={() => setShowReasoning((s) => !s)}>
+            <Brain size={14} /> {streaming && !m.content ? "Thinking…" : "Thought process"}
+            <ChevronDown size={14} className={`transition ${showReasoning ? "rotate-180" : ""}`} />
+          </button>
+          {(showReasoning || (streaming && !m.content)) && (
+            <div className="mt-2 max-h-72 overflow-y-auto whitespace-pre-wrap border-l-2 border-ink-500 pl-3 text-sm leading-6 text-slate-400">{m.reasoning}</div>
+          )}
+        </div>
+      )}
+      {m.attachments?.length ? <Attachments list={m.attachments} /> : null}
+      {m.content ? (
+        <div className={streaming ? "typing-cursor" : ""}>
+          <Markdown text={m.content} />
+        </div>
+      ) : streaming && !m.reasoning ? (
+        <div className="flex h-7 items-center gap-1" aria-label="Generating">
+          {[0, 1, 2].map((i) => (
+            <span key={i} className="h-2 w-2 animate-bounce rounded-full bg-slate-400" style={{ animationDelay: `${i * 0.15}s` }} />
+          ))}
+        </div>
+      ) : null}
+      {m.status === "error" && (
+        <div className="mt-2 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-950/40 px-3 py-2 text-sm text-red-200" data-testid="msg-error">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" /> {m.error || "Something went wrong."}
+        </div>
+      )}
+      {m.status === "stopped" && <div className="mt-1 text-xs text-slate-500">Generation stopped.</div>}
+      {!streaming && (
+        <div className="mt-2 flex items-center gap-1 text-slate-500">
+          {m.content && (
+            <button
+              className="btn-ghost p-1.5"
+              onClick={() => {
+                void navigator.clipboard.writeText(m.content);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1500);
+              }}
+              aria-label="Copy response"
+              title="Copy"
+            >
+              {copied ? <Check size={15} /> : <Copy size={15} />}
+            </button>
+          )}
+          {isLast && canAct && (
+            <button className="btn-ghost p-1.5" onClick={onRegenerate} aria-label="Regenerate response" title="Regenerate" data-testid="regenerate">
+              <RefreshCw size={15} />
+            </button>
+          )}
+          {m.modelName && <span className="ml-1 text-xs">{m.modelName}</span>}
+        </div>
+      )}
+    </div>
+  );
+}
