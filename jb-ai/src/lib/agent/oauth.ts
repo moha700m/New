@@ -36,7 +36,7 @@ export const MCP_OAUTH_CALLBACK = "/api/oauth/mcp/callback";
  * (RFC 8252 native-app style). For those we register a loopback redirect: after sign-in the browser lands on
  * a localhost address that doesn't open, and the owner pastes that address back into the site (paste-back step).
  */
-export const LOOPBACK_REDIRECT = "http://localhost:8976/jb-ai/oauth/callback";
+export const LOOPBACK_REDIRECT = "http://localhost:8976/oauth/callback";
 
 async function getJson(url: string, timeoutMs = 10_000): Promise<any | null> {
   try {
