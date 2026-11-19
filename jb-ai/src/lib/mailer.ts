@@ -34,8 +34,17 @@ export async function sendMail(to: string, subject: string, html: string, text: 
     if (process.env.NODE_ENV !== "production") console.info(`[mailer:dev] To: ${to}\nSubject: ${subject}\n${text}`);
     return { sent: false, reason: "SMTP is not configured" };
   }
-  await transport().sendMail({ from: mailFrom(), to, subject, html, text });
-  return { sent: true };
+  const masked = to.replace(/^(.{2}).*(@.*)$/, "$1***$2");
+  try {
+    const info = await transport().sendMail({ from: mailFrom(), to, subject, html, text });
+    const rejected = (info.rejected ?? []).length;
+    console.log(`[mailer] sent to=${masked} id=${info.messageId} accepted=${(info.accepted ?? []).length} rejected=${rejected} resp=${String(info.response ?? "").slice(0, 80)}`);
+    if (rejected) return { sent: false, reason: "rejected" };
+    return { sent: true };
+  } catch (e) {
+    console.error(`[mailer] FAILED to=${masked}: ${(e as Error).message}`);
+    throw e;
+  }
 }
 
 export function appUrl(path = "") {

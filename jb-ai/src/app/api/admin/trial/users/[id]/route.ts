@@ -2,9 +2,10 @@ import { z } from "zod";
 import { adminRoute } from "@/lib/admin";
 import { isOwnerAccount } from "@/lib/access";
 import { prisma } from "@/lib/db";
+import { sendVerificationEmail } from "@/lib/auth";
 import { HttpError, json, parseBody } from "@/lib/http";
 
-const schema = z.object({ action: z.enum(["full", "trial", "reset", "verify", "disable", "enable", "delete"]) });
+const schema = z.object({ action: z.enum(["full", "trial", "reset", "verify", "disable", "enable", "delete", "resend"]) });
 
 /** Owner actions on a trial account: upgrade to full (unlimited), back to trial, reset messages, verify, disable/enable, delete. */
 export const POST = adminRoute<{ id: string }>(async ({ req, params, log }) => {
@@ -12,6 +13,12 @@ export const POST = adminRoute<{ id: string }>(async ({ req, params, log }) => {
   const u = await prisma.user.findUnique({ where: { id: params.id } });
   if (!u) throw new HttpError(404, "المستخدم غير موجود");
   if (isOwnerAccount(u) || (u.access !== "trial" && u.access !== "full")) throw new HttpError(400, "هذا الإجراء لحسابات التجربة فقط");
+  if (action === "resend") {
+    if (u.emailVerifiedAt) throw new HttpError(400, "الإيميل متأكد من قبل");
+    const r = await sendVerificationEmail(u);
+    await log("trial.user_resend", { entityType: "user", entityId: u.id, details: { email: u.email, sent: r.sent } });
+    return json({ ok: r.sent });
+  }
   if (action === "delete") {
     await prisma.user.delete({ where: { id: u.id } });
   } else {

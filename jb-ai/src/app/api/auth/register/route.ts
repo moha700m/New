@@ -59,6 +59,7 @@ export const POST = handler(async (req: Request) => {
     },
   });
   const mail = await sendVerificationEmail(user).catch((e) => ({ sent: false, reason: (e as Error).message }));
+  if (!mail.sent) console.error(`[register] verification email not sent user=${user.id}: ${mail.reason ?? ""}`);
   await createSession(user.id, req);
   await audit({ id: user.id, email: user.email }, trial ? "user.register_trial" : "user.register", { entityType: "user", entityId: user.id, ip });
   return json({ ok: true, trial, verificationEmailSent: mail.sent }, 201);

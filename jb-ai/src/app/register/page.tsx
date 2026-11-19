@@ -33,7 +33,25 @@ export default function RegisterPage() {
     return (
       <AuthShell title="تحقّق من بريدك ✉️" subtitle="أرسلنا لك رابط تأكيد. افتحه وتقدر تبدأ تجربتك المجانية على طول.">
         <div className="space-y-3 text-sm leading-7 text-slate-300" data-testid="trial-check-email">
-          <p>ما وصلك؟ شيّك على مجلد «غير المرغوب» (Spam).</p>
+          <p>ما وصلك؟ شيّك على مجلد «غير المرغوب» (Spam)، وإذا ما لقيته اضغط تحت.</p>
+          <button
+            type="button"
+            className="btn-outline w-full justify-center"
+            data-testid="resend-verification"
+            onClick={async (e) => {
+              const b = e.currentTarget;
+              b.disabled = true;
+              try {
+                await api("/api/auth/resend", { method: "POST" });
+                b.textContent = "أرسلناه لك مرة ثانية ✔";
+              } catch (err) {
+                b.textContent = (err as Error).message;
+                b.disabled = false;
+              }
+            }}
+          >
+            أعد إرسال رابط التفعيل
+          </button>
           <a href="/" className="btn-primary w-full justify-center">متابعة</a>
         </div>
       </AuthShell>
