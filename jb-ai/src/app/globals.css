@@ -73,6 +73,15 @@ pre, code, kbd, .ltr { direction: ltr; unicode-bidi: isolate; }
   background-position: center 55%;
   background-size: min(80vmin, 700px);
   opacity: 0.42;
+  /* Feather the artwork's black square so no hard edges show on the page gradient */
+  -webkit-mask-image: radial-gradient(circle closest-side, #000 62%, transparent 100%);
+  mask-image: radial-gradient(circle closest-side, #000 62%, transparent 100%);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center 55%;
+  mask-position: center 55%;
+  -webkit-mask-size: min(80vmin, 700px) min(80vmin, 700px);
+  mask-size: min(80vmin, 700px) min(80vmin, 700px);
 }
 .chat-bg::after {
   content: "";
@@ -80,4 +89,4 @@ pre, code, kbd, .ltr { direction: ltr; unicode-bidi: isolate; }
   inset: 0;
   background: radial-gradient(ellipse at center, rgba(5, 8, 18, 0.05) 0%, rgba(5, 8, 18, 0.35) 70%, rgba(5, 8, 18, 0.7) 100%);
 }
-@media (max-width: 640px) { .chat-bg { background-size: contain; background-position: center; opacity: 0.38; } }
+@media (max-width: 640px) { .chat-bg { background-size: min(100vw, 100%); background-position: center; opacity: 0.38; -webkit-mask-position: center; mask-position: center; -webkit-mask-size: min(100vw, 100%) min(100vw, 100%); mask-size: min(100vw, 100%) min(100vw, 100%); } }
