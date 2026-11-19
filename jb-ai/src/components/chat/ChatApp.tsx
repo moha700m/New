@@ -637,6 +637,10 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
 
         {empty ? (
           <div className="flex flex-1 flex-col items-center justify-center px-3 pb-24 sm:px-4">
+            <picture>
+              <source srcSet="/chat-logo.webp" type="image/webp" />
+              <img src="/chat-logo.jpg" alt="محمد | التقني" width={112} height={112} decoding="async" data-testid="chat-logo" className="mb-5 h-24 w-24 rounded-3xl object-cover shadow-[0_0_40px_rgba(59,130,246,0.35)] ring-1 ring-white/15 sm:h-28 sm:w-28" />
+            </picture>
             <h1 className="text-center text-4xl font-medium sm:text-5xl">اسألني أي شي</h1>
             <p className="mt-3 text-center text-[15px] text-slate-300 sm:text-base">{config?.site.tagline ?? "مساعدة في البرمجة، وأسئلة تقنية، وأكثر."}</p>
             <div className="mt-8 w-full max-w-3xl">{composerArea}</div>
