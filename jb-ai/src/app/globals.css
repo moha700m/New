@@ -60,3 +60,24 @@ pre, code, kbd, .ltr { direction: ltr; unicode-bidi: isolate; }
 .prose-chat :not(pre) > code { @apply rounded bg-ink-700 px-1.5 py-0.5 text-[0.85em] text-slate-100; }
 .prose-chat ul, .prose-chat ol { padding-inline-start: 1.4em; padding-left: 0; }
 .typing-cursor::after { content: "▍"; @apply ms-0.5 animate-pulse text-brand-400; }
+
+/* Owner's artwork behind the chat (messages area only). Absolute inside <main> (isolate), so it never scrolls, zooms or overflows. */
+.chat-bg {
+  position: absolute;
+  inset: 0;
+  z-index: -10;
+  pointer-events: none;
+  background-image: url("/chat-bg.jpg");
+  background-image: image-set(url("/chat-bg.webp") type("image/webp"), url("/chat-bg.jpg") type("image/jpeg"));
+  background-repeat: no-repeat;
+  background-position: center 55%;
+  background-size: min(80vmin, 700px);
+  opacity: 0.16;
+}
+.chat-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(5, 8, 18, 0.15) 0%, rgba(5, 8, 18, 0.6) 70%, rgba(5, 8, 18, 0.85) 100%);
+}
+@media (max-width: 640px) { .chat-bg { background-size: contain; background-position: center; opacity: 0.14; } }

@@ -586,7 +586,8 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
       />
-      <main className="relative flex min-w-0 flex-1 flex-col">
+      <main className="relative isolate flex min-w-0 flex-1 flex-col">
+        <div aria-hidden className="chat-bg" data-testid="chat-bg" />
         <header className="flex h-14 shrink-0 items-center gap-2 px-3 sm:px-4">
           <button
             className={`btn-ghost p-2 ${collapsed ? "" : "md:hidden"}`}
