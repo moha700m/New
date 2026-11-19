@@ -55,6 +55,11 @@ export default function TrialAdminPage() {
           <div className="flex flex-wrap gap-2 pt-1 text-sm">
             <span>التجربة: <OnOff on={s.enabled} onLabel="شغّالة" offLabel="مقفلة" /></span>
             <span>البريد (SMTP): <OnOff on={data.mailerConfigured} onLabel="مُعدّ" offLabel="غير مُعدّ" /></span>
+            {data.mailerConfigured && (
+              <button className="btn-ghost px-2 py-0.5 text-xs" disabled={busy === "mail"} onClick={() => run("mail", () => api<{ to: string }>("/api/admin/trial/test-email", { body: {} }), (r) => `أرسلت إيميل تجربة إلى ${r.to}`)} data-testid="trial-test-email">
+                أرسل إيميل تجربة
+              </button>
+            )}
           </div>
           {s.enabled && s.requireVerification && !data.mailerConfigured && (
             <p className="rounded-lg bg-amber-500/10 p-2 text-xs leading-6 text-amber-200">التسجيل متوقف لأن البريد غير مُعدّ (رابط التأكيد ما يقدر يوصل). أضف SMTP_URL في Vercel، أو أطفئ «اشتراط تأكيد الإيميل» على مسؤوليتك.</p>

@@ -15,12 +15,26 @@ function transport() {
   });
 }
 
+/** MAIL_FROM, else the SMTP login address (Gmail rejects/rewrites other senders). */
+function mailFrom() {
+  if (process.env.MAIL_FROM) return process.env.MAIL_FROM;
+  let user = process.env.SMTP_USER || "";
+  if (!user && process.env.SMTP_URL) {
+    try {
+      user = decodeURIComponent(new URL(process.env.SMTP_URL).username);
+    } catch {
+      /* ignore */
+    }
+  }
+  return user.includes("@") ? `"محمد | التقني" <${user}>` : "محمد التقني <no-reply@localhost>";
+}
+
 export async function sendMail(to: string, subject: string, html: string, text: string): Promise<{ sent: boolean; reason?: string }> {
   if (!mailerConfigured()) {
     if (process.env.NODE_ENV !== "production") console.info(`[mailer:dev] To: ${to}\nSubject: ${subject}\n${text}`);
     return { sent: false, reason: "SMTP is not configured" };
   }
-  await transport().sendMail({ from: process.env.MAIL_FROM || "محمد التقني <no-reply@localhost>", to, subject, html, text });
+  await transport().sendMail({ from: mailFrom(), to, subject, html, text });
   return { sent: true };
 }
 
