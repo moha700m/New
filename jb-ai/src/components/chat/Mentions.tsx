@@ -1,5 +1,5 @@
 "use client";
-import { AtSign, Globe, Image as ImageIcon, Link2, Plug, Rocket, X } from "lucide-react";
+import { AtSign, Boxes, Globe, Image as ImageIcon, Link2, Plug, Rocket, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { BUILTIN_MENTIONS, CONNECTOR_ALIASES, connectorToken, type MentionKind } from "@/lib/mentions";
 import { api } from "../api";
@@ -44,8 +44,8 @@ export function useMentionCatalog(enabled: boolean) {
         desc: b.desc,
         kind: b.kind,
         aliases: b.aliases,
-        connected: b.needs ? Boolean(d.github?.connected) : true,
-        connectUrl: b.needs ? ghUrl : undefined,
+        connected: b.needs === "github" ? Boolean(d.github?.connected) : b.needs ? isConnected(bySlug.get(b.needs)) : true,
+        connectUrl: b.needs === "github" ? ghUrl : b.needs ? `/api/connect/mcp?preset=${b.needs}&back=${back}` : undefined,
       }));
       const seen = new Set(BUILTIN_MENTIONS.map((b) => b.key));
       for (const p of d.presets) {
@@ -92,6 +92,7 @@ export function filterMentions(items: MentionItem[], q: string) {
 
 function Icon({ it }: { it: MentionItem }) {
   const cls = "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl";
+  if (it.key === "appdeploy") return <span className={`${cls} bg-orange-500/15 text-orange-300`}><Boxes size={17} /></span>;
   if (it.key === "site") return <span className={`${cls} bg-emerald-500/15 text-emerald-300`}><Rocket size={17} /></span>;
   if (it.key === "search") return <span className={`${cls} bg-sky-500/15 text-sky-300`}><Globe size={17} /></span>;
   if (it.key === "image") return <span className={`${cls} bg-fuchsia-500/15 text-fuchsia-300`}><ImageIcon size={17} /></span>;

@@ -236,6 +236,7 @@ export async function runAgent(opts: {
       const g = groups.find((x) => x.slug === m.key)!;
       if (!g.core) g.tools.slice(0, 40).forEach((t) => active.add(t.name));
     } else if (m.needs && !knownSlugs.has(m.needs)) missingMentions.push(m.label);
+    else if (m.needs && m.needs !== "github") groups.find((x) => x.slug === m.needs)?.tools.slice(0, 40).forEach((t) => active.add(t.name));
   }
   for (const p of resolveMentions(lastUserRaw, CONNECTOR_PRESETS.map((x) => ({ slug: x.key, name: x.name })))) {
     if (p.kind === "connector" && !knownSlugs.has(p.key)) missingMentions.push(p.label);
@@ -249,6 +250,9 @@ export async function runAgent(opts: {
               "Deploy/publish ONLY to the mentioned target(s):",
               mentions.some((m) => m.key === "site") ? "• @موقعي → publish_site (instant link on this site)." : "• Do NOT use publish_site (the user did not ask for the built-in hosting).",
               mentions.some((m) => m.key === "github") ? "• @GitHub → github__create_repo (public) → github__push_files (workspace) → github__enable_pages, then check_url the github.io link (Pages can take ~1 min: retry) and give the repo + live link." : "",
+              mentions.some((m) => m.key === "appdeploy")
+                ? "• @AppDeploy (appdeploy.ai) → build the FULL app (frontend + backend/API + database if needed) and deploy it ONLY with the appdeploy__* tools (read their descriptions for the expected file/project format). After deploying, poll appdeploy__get_app_status (or the status tool it provides) until it's live, fix any build/runtime errors it reports and redeploy, then check_url the live URL with expect_text. Never use publish_site or GitHub for this. Finish with the live URL and what was built."
+                : "",
               mentions.some((m) => m.key === "vercel") ? "• @Vercel → push to GitHub (create_repo + push_files) then github__deploy_links and give the Vercel import link (one tap)." : "",
               ...mentions.filter((m) => m.kind === "connector").map((m) => `• @${m.token} → use the ${m.label} connector tools (${m.key}__*) for this; if a needed tool isn't loaded call use_connector {connector:"${m.key}"} with a filter.`),
             ]

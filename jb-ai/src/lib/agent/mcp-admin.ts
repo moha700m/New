@@ -32,6 +32,7 @@ export function redactMcp<T extends { tokenEncrypted: string | null; tools: unkn
  */
 export const CONNECTOR_PRESETS = [
   // build & deploy
+  { key: "appdeploy", cat: "build", name: "App Deploy", url: "https://api-v2.appdeploy.ai/mcp", desc: "انشر تطبيقات كاملة (واجهة + باك إند + قاعدة بيانات) برابط حي — appdeploy.ai" },
   { key: "netlify", cat: "build", name: "Netlify", url: "https://netlify-mcp.netlify.app/mcp", desc: "انشر مواقع وأنشئ مشاريع Netlify" },
   { key: "cloudflare", cat: "build", name: "Cloudflare", url: "https://mcp.cloudflare.com/mcp", desc: "كل حساب Cloudflare: Workers و Pages و DNS و R2 و D1" },
   { key: "cloudflare-builds", cat: "build", name: "Cloudflare Builds", url: "https://builds.mcp.cloudflare.com/mcp", desc: "بناءات ونشر Workers وسجلاتها" },

@@ -20,6 +20,7 @@ export const BUILTIN_MENTIONS: BuiltinMention[] = [
   { key: "site", token: "موقعي", label: "موقعي", desc: "استضافة فورية على رابط موقعك /s/…", kind: "deploy", aliases: ["site", "hosting", "استضافة", "موقع"] },
   { key: "github", token: "GitHub", label: "GitHub", desc: "مستودع + GitHub Pages", kind: "deploy", aliases: ["github", "جيت", "قيت", "جيتهب", "قيتهب", "pages"], needs: "github" },
   { key: "vercel", token: "Vercel", label: "Vercel", desc: "عن طريق GitHub — رابط استيراد بضغطة", kind: "deploy", aliases: ["vercel", "فيرسل", "فرسل"], needs: "github" },
+  { key: "appdeploy", token: "AppDeploy", label: "App Deploy", desc: "تطبيق كامل (واجهة + باك + قاعدة بيانات) برابط حي — appdeploy.ai", kind: "deploy", aliases: ["appdeploy", "app", "deploy", "اب", "أب", "ابديبلوي", "اب دبلوي", "تطبيق", "ابلكيشن"], needs: "appdeploy" },
   { key: "search", token: "بحث", label: "بحث", desc: "بحث وقراءة صفحات الإنترنت", kind: "builtin", aliases: ["search", "web", "انترنت", "الإنترنت"] },
   { key: "image", token: "صورة", label: "صورة", desc: "توليد صور بدون قيود", kind: "builtin", aliases: ["image", "img", "صور", "تصميم"] },
 ];
@@ -37,6 +38,7 @@ export const CONNECTOR_ALIASES: Record<string, string[]> = {
   notion: ["نوشن"],
   stripe: ["سترايب"],
   zapier: ["زابير"],
+  appdeploy: ["اب", "تطبيق", "app", "deploy"],
   exa: ["اكسا", "بحث"],
   huggingface: ["هقنق", "hf"],
   context7: ["توثيق", "docs"],
