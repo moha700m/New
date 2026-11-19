@@ -14,6 +14,7 @@ import { SpendMeter } from "./SpendMeter";
 import { type ModeKey, type ModeOption } from "./ModeMenu";
 import { useMentionCatalog, type MentionItem } from "./Mentions";
 import { Sidebar, type ConvItem, type MeInfo } from "./Sidebar";
+import { TrialBar, TrialUpgradeCard } from "./TrialUpgrade";
 
 const MODEL_KEY = "jb.selectedModel";
 
@@ -50,6 +51,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
   const [connectorsOpen, setConnectorsOpen] = useState(false);
   const [connectorsCount, setConnectorsCount] = useState(0);
   const [spendKey, setSpendKey] = useState(0);
+  const [trialBlock, setTrialBlock] = useState<"exhausted" | "cap" | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const runRef = useRef<{ id: string; finished: boolean; seq: number } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -110,7 +112,8 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
   const reasoningAvailable = Boolean(config?.defaults.reasoning) || Boolean(current?.capabilities.reasoning);
   const searchAvailable = Boolean(current?.capabilities.webSearch);
   const searchLocked = signedIn && !me?.plan?.allowWebSearch;
-  const agentAvailable = signedIn && !current?.capabilities.imageGeneration;
+  const isTrial = Boolean(me?.trial);
+  const agentAvailable = signedIn && !isTrial && !current?.capabilities.imageGeneration;
   const isAdmin = Boolean(me?.user?.isAdmin);
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
@@ -315,6 +318,13 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
       if (!res.ok || !res.body) {
         const d = await res.json().catch(() => ({ error: `تعذّر الطلب (${res.status})` }));
         if (d.code === "model_unavailable") setSelectedModel(null);
+        if (d.code === "trial_exhausted" || d.code === "trial_daily_cap") {
+          // the upgrade card takes over: drop the unanswered turn
+          setTrialBlock(d.code === "trial_daily_cap" ? "cap" : "exhausted");
+          setMessages((list) => list.filter((m) => m.id !== ref.id && m.id !== "pending-user"));
+          void loadMe();
+          return;
+        }
         patchMessage(ref.id, (m) => ({ ...m, status: "error", error: d.error, live: null }));
         if (res.status === 401) router.push("/login");
         return;
@@ -394,7 +404,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
         setSelectedModel(agentModel);
       }
     }
-    if (me?.user?.mustVerify) return toast("يرجى تأكيد بريدك الإلكتروني أولًا.", "err");
+    if (me?.user?.mustVerify) return toast(isTrial ? "أكّد إيميلك أول، بعدها تقدر ترسل." : "يرجى تأكيد بريدك الإلكتروني أولًا.", "err");
     const tempId = `pending-assistant-${Date.now()}`;
     setMessages((list) => [
       ...list,
@@ -468,7 +478,9 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
   }
 
   // role picker: each role → the default model the admin set for it (Admin → الافتراضيات)
-  const modeOptions: ModeOption[] = (["text", "reasoning", "code", "vision", "image"] as ModeKey[])
+  const trial = me?.trial ?? null;
+  const trialOut: "exhausted" | "cap" | null = trial ? (trialBlock ?? (trial.remaining <= 0 ? "exhausted" : trial.capReached ? "cap" : null)) : null;
+  const modeOptions: ModeOption[] = trial ? [] : (["text", "reasoning", "code", "vision", "image"] as ModeKey[])
     .map((key) => {
       const id = key === "image" ? imageDefault : (config?.defaults[key] ?? null);
       const m = id ? models.find((x) => x.id === id) : undefined;
@@ -512,10 +524,10 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
       streaming={streaming}
       think={think}
       setThink={setThink}
-      thinkAvailable={reasoningAvailable && !current?.capabilities.imageGeneration}
+      thinkAvailable={!isTrial && reasoningAvailable && !current?.capabilities.imageGeneration}
       search={search}
       setSearch={setSearch}
-      searchAvailable={searchAvailable}
+      searchAvailable={!isTrial && searchAvailable}
       searchLocked={searchLocked}
       uploadsAllowed={me?.plan?.allowUploads ?? false}
       onRequireAuth={signedIn ? undefined : requireAuth}
@@ -535,12 +547,24 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
             }
           : undefined
       }
-      onToggleImage={signedIn && (imageDefault || current?.capabilities.imageGeneration) ? toggleImageMode : undefined}
+      onToggleImage={signedIn && !isTrial && (imageDefault || current?.capabilities.imageGeneration) ? toggleImageMode : undefined}
       onOpenConnectors={isAdmin ? () => setConnectorsOpen(true) : undefined}
       connectorsCount={connectorsCount}
       autoFocus
       disabled={config?.site.maintenanceMode}
     />
+  );
+  const composerArea = (
+    <>
+      {trial && trialOut ? (
+        <TrialUpgradeCard t={trial} reason={trialOut} />
+      ) : (
+        <>
+          {trial && <TrialBar t={trial} />}
+          {composer}
+        </>
+      )}
+    </>
   );
 
   return (
@@ -573,7 +597,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
           >
             <Menu size={20} />
           </button>
-          <ModelPicker models={models} value={selectedModel} onChange={chooseModel} defaultId={defaultId} signedIn={signedIn} />
+          <ModelPicker models={models} value={selectedModel} onChange={chooseModel} defaultId={defaultId} signedIn={signedIn} title={config?.trialListTitle ?? null} />
           <span className="hidden items-center gap-1 text-[11px] text-slate-500 sm:flex" title={connected ? "متصل بالتحديثات المباشرة" : "جارٍ إعادة الاتصال بالتحديثات المباشرة"}>
             {connected ? <Wifi size={12} className="text-emerald-400" /> : <WifiOff size={12} />}
           </span>
@@ -590,9 +614,9 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
 
         {me?.user?.mustVerify && (
           <div className="mx-3 mb-1 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-950/40 px-3 py-2 text-sm text-amber-100 sm:mx-auto sm:w-full sm:max-w-3xl">
-            <MailWarning size={16} className="shrink-0" /> أكّد بريدك الإلكتروني لتبدأ المحادثة. تحقّق من صندوق الوارد.
-            <button className="ms-auto underline" onClick={() => api("/api/auth/resend", { method: "POST" }).then(() => toast("تم إرسال رسالة التأكيد", "ok")).catch((e) => toast(e.message, "err"))}>
-              إعادة الإرسال
+            <MailWarning size={16} className="shrink-0" /> {isTrial ? "أكّد إيميلك عشان تبدأ، شيّك على بريدك (وحتى الـ Spam)." : "أكّد بريدك الإلكتروني لتبدأ المحادثة. تحقّق من صندوق الوارد."}
+            <button className="ms-auto underline" onClick={() => api("/api/auth/resend", { method: "POST" }).then(() => toast(isTrial ? "أرسلنا لك رابط التأكيد مرة ثانية" : "تم إرسال رسالة التأكيد", "ok")).catch((e) => toast(e.message, "err"))}>
+              {isTrial ? "أرسله مرة ثانية" : "إعادة الإرسال"}
             </button>
           </div>
         )}
@@ -602,7 +626,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
           <div className="flex flex-1 flex-col items-center justify-center px-3 pb-24 sm:px-4">
             <h1 className="text-center text-4xl font-medium sm:text-5xl">اسأل أي شيء</h1>
             <p className="mt-3 text-center text-[15px] text-slate-300 sm:text-base">{config?.site.tagline ?? "مساعدة في البرمجة، وأسئلة تقنية، وأكثر."}</p>
-            <div className="mt-8 w-full max-w-3xl">{composer}</div>
+            <div className="mt-8 w-full max-w-3xl">{composerArea}</div>
             {config && !models.length && <p className="mt-4 text-sm text-slate-500">لا توجد نماذج مفعّلة بعد. على المسؤول تفعيل النماذج من مركز إدارة المحركات.</p>}
           </div>
         ) : (
@@ -630,7 +654,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
               </div>
             </div>
             <div className="mx-auto w-full max-w-3xl px-3 pb-3 sm:px-4 sm:pb-4">
-              {composer}
+              {composerArea}
               <p className="mt-2 text-center text-[11px] text-slate-500">قد يخطئ الذكاء الاصطناعي. تحقّق من المعلومات المهمة.</p>
             </div>
           </>

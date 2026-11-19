@@ -8,11 +8,19 @@ import { randomToken, sha256 } from "./crypto";
 import { HttpError } from "./http";
 import { appUrl, mailerConfigured, sendMail } from "./mailer";
 import { getSettings } from "./settings";
+import { getTrialSettings } from "./trial";
+
+/** While the site is private: trial accounts get in while the trial is on, manually upgraded ("full") accounts always. */
+export async function privateModeAllows(u: { access?: string | null }) {
+  if (u.access === "full") return true;
+  if (u.access === "trial") return (await getTrialSettings()).enabled;
+  return false;
+}
 
 export const SESSION_COOKIE = "jb_session";
 const SESSION_DAYS = 30;
 
-export type SafeUser = Pick<User, "id" | "email" | "name" | "role" | "emailVerifiedAt" | "createdAt">;
+export type SafeUser = Pick<User, "id" | "email" | "name" | "role" | "emailVerifiedAt" | "createdAt" | "access">;
 
 export async function hashPassword(pw: string) {
   return bcrypt.hash(pw, 12);
@@ -60,10 +68,10 @@ export async function getCurrentUser(): Promise<SafeUser | null> {
   if (!token) return null;
   const session = await prisma.session.findUnique({
     where: { tokenHash: sha256(token) },
-    include: { user: { select: { id: true, email: true, name: true, role: true, emailVerifiedAt: true, createdAt: true, disabled: true } } },
+    include: { user: { select: { id: true, email: true, name: true, role: true, emailVerifiedAt: true, createdAt: true, disabled: true, access: true } } },
   });
   if (!session || session.expiresAt < new Date() || session.user.disabled) return null;
-  if (isPrivateMode() && !isOwnerAccount(session.user)) return null;
+  if (isPrivateMode() && !isOwnerAccount(session.user) && !(await privateModeAllows(session.user))) return null;
   if (Date.now() - session.lastUsedAt.getTime() > 3600_000) {
     await prisma.session.update({ where: { id: session.id }, data: { lastUsedAt: new Date() } }).catch(() => {});
   }
@@ -92,6 +100,7 @@ export async function requireOwner(): Promise<SafeUser> {
 /** Whether the user must verify their email before chatting. */
 export async function needsVerification(u: SafeUser) {
   if (u.emailVerifiedAt || isOwnerAccount(u)) return false;
+  if (u.access === "trial") return (await getTrialSettings()).requireVerification;
   const s = await getSettings();
   return s.requireEmailVerification && mailerConfigured();
 }
@@ -106,7 +115,7 @@ export async function issueToken(userId: string, type: TokenType, ttlMs: number)
 export async function consumeToken(token: string, type: TokenType) {
   const row = await prisma.verificationToken.findUnique({ where: { tokenHash: sha256(token) } });
   if (!row || row.type !== type || row.usedAt || row.expiresAt < new Date()) {
-    throw new HttpError(400, "هذا الرابط غير صالح أو انتهت صلاحيته.", "invalid_token");
+    throw new HttpError(400, "الرابط ما يشتغل أو انتهت مدته.", "invalid_token");
   }
   await prisma.verificationToken.update({ where: { id: row.id }, data: { usedAt: new Date() } });
   return row.userId;
@@ -118,9 +127,9 @@ export async function sendVerificationEmail(user: { id: string; email: string })
   const link = appUrl(`/verify-email?token=${encodeURIComponent(token)}`);
   return sendMail(
     user.email,
-    `أكّد حسابك في ${s.siteName}`,
-    `<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;line-height:1.8"><p>أهلًا بك في ${s.siteName}!</p><p><a href="${link}">اضغط هنا لتأكيد بريدك الإلكتروني</a></p><p>صلاحية الرابط ٤٨ ساعة.</p></div>`,
-    `أهلًا بك في ${s.siteName}! أكّد بريدك الإلكتروني من هذا الرابط: ${link}`,
+    `أكّد إيميلك في ${s.siteName}`,
+    `<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;line-height:1.8"><p>هلا والله في ${s.siteName}! 👋</p><p><a href="${link}">اضغط هنا وأكّد إيميلك</a> وتقدر تبدأ تجربتك المجانية على طول.</p><p>الرابط شغال لمدة ٤٨ ساعة.</p></div>`,
+    `هلا والله في ${s.siteName}! أكّد إيميلك من هالرابط وابدأ تجربتك: ${link}`,
   );
 }
 

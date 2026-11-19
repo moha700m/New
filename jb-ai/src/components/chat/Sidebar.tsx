@@ -15,6 +15,7 @@ export interface MeInfo {
   plan?: { key: string; name: string; dailyMessageLimit: number | null; allowUploads: boolean; allowWebSearch: boolean; allowImageGeneration: boolean; maxUploadMb: number };
   usage?: { messagesToday: number; messagesThisMonth: number; tokensThisMonth: number };
   subscription?: { status: string; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean } | null;
+  trial?: import("./TrialUpgrade").TrialInfo | null;
 }
 
 function groupLabel(d: string) {

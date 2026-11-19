@@ -1,5 +1,5 @@
 "use client";
-import { Activity, BarChart3, Boxes, Cpu, CreditCard, Gauge, LayoutGrid, Menu, MessageSquare, Route, Server, Settings2, ShieldCheck, Users, Wallet, X, Plug } from "lucide-react";
+import { Gift, Activity, BarChart3, Boxes, Cpu, CreditCard, Gauge, LayoutGrid, Menu, MessageSquare, Route, Server, Settings2, ShieldCheck, Users, Wallet, X, Plug } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -8,6 +8,7 @@ import { Logo } from "../Logo";
 export const NAV = [
   { href: "/admin", label: "نظرة عامة", icon: Gauge },
   { href: "/admin/users", label: "المستخدمون", icon: Users },
+  { href: "/admin/trial", label: "التجربة المجانية", icon: Gift },
   { href: "/admin/providers", label: "مزوّدو الذكاء الاصطناعي", icon: Server },
   { href: "/admin/engines", label: "محركات الذكاء الاصطناعي", icon: Cpu },
   { href: "/admin/mcp", label: "الموصّلات و GitHub (الوكيل)", icon: Plug },

@@ -21,6 +21,9 @@ export interface LiveConfig {
   live: { mode: "sse" | "poll"; intervalMs: number };
   defaults: { text: string | null; reasoning: string | null; code: string | null; vision: string | null; image: string | null; agent?: string | null };
   models: LiveModel[];
+  trialEnabled?: boolean;
+  trialSignupOpen?: boolean;
+  trialListTitle?: string | null;
 }
 
 /**

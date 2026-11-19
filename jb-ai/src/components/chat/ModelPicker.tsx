@@ -20,7 +20,7 @@ const GROUPS: { key: LiveModel["category"]; label: string }[] = [
 ];
 
 /** One model picker (Claude-style) with three tabs: النماذج / بدون فلترة / مجانية. */
-export function ModelPicker({ models, value, onChange, defaultId, signedIn }: { models: LiveModel[]; value: string | null; onChange: (id: string) => void; defaultId: string | null; signedIn: boolean }) {
+export function ModelPicker({ models, value, onChange, defaultId, signedIn, title }: { models: LiveModel[]; value: string | null; onChange: (id: string) => void; defaultId: string | null; signedIn: boolean; title?: string | null }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const ref = useRef<HTMLDivElement>(null);
@@ -86,11 +86,16 @@ export function ModelPicker({ models, value, onChange, defaultId, signedIn }: { 
               })}
             </div>
           )}
-          <div className="relative border-b border-ink-700 p-2">
+          {title && (
+            <div className="flex items-center gap-2 border-b border-ink-700 px-3 py-2.5 text-[14px] font-bold text-rose-200" data-testid="trial-models-title">
+              <Flame size={15} className="text-rose-400" /> {title}
+            </div>
+          )}
+          <div className={`relative border-b border-ink-700 p-2 ${title ? "hidden" : ""}`}>
             <Search size={14} className="pointer-events-none absolute start-4 top-1/2 -translate-y-1/2 text-slate-500" />
             <input className="input py-1.5 ps-8" placeholder="ابحث في كل النماذج…" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
-          {T.note && !q && <div className="px-3 pt-2 text-[11px] text-slate-500">{T.note}</div>}
+          {T.note && !q && !title && <div className="px-3 pt-2 text-[11px] text-slate-500">{T.note}</div>}
           <div className="max-h-[58vh] overflow-y-auto p-1.5" role="listbox">
             {!filtered.length && <p className="p-3 text-sm text-slate-400">لا توجد نماذج مطابقة.</p>}
             {GROUPS.map((g) => {

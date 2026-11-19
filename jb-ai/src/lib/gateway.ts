@@ -50,7 +50,14 @@ async function markProvider(p: Provider, ok: boolean, err?: string) {
 }
 
 /** Everything that must be validated before a stream is opened. Throws HttpError on failure. */
-export async function prepareChat(userId: string, plan: Plan, input: ChatInput, settings: SystemSettings) {
+export interface ChatLimits {
+  /** hard cap on output tokens (trial) */
+  maxOutputTokens?: number;
+  /** cap on characters per context message (trial) */
+  maxInputChars?: number;
+}
+
+export async function prepareChat(userId: string, plan: Plan, input: ChatInput, settings: SystemSettings, limits: ChatLimits = {}) {
   await enforceQuota(userId, plan);
 
   // ----- conversation ownership
@@ -94,13 +101,20 @@ export async function prepareChat(userId: string, plan: Plan, input: ChatInput, 
   // history may contain earlier images too
   const needsVision = attachments.some((a) => a.kind === "image");
 
-  const targets = await resolveRoute({
+  let targets = await resolveRoute({
     requestedModelId: requested,
     role,
     plan,
     needsVision,
     allowsModel: (m) => planAllowsModel(plan, m.id),
   });
+  if (!plan.allowAllModels) {
+    // routing fallbacks must stay inside the plan too (a trial must never fall back to an expensive model)
+    const ok: typeof targets = [];
+    for (const t of targets) if (await planAllowsModel(plan, t.model.id)) ok.push(t);
+    if (!ok.length) throw new HttpError(503, "النموذج غير متاح حاليًا. جرّب نموذج ثاني.", "no_route");
+    targets = ok;
+  }
 
   const webSearch = input.webSearch && plan.allowWebSearch;
   const agent = Boolean(input.agent) && role !== "image";
@@ -157,7 +171,7 @@ export async function prepareChat(userId: string, plan: Plan, input: ChatInput, 
   if (settings.systemPrompt.trim()) contextMessages.push({ role: "system", content: settings.systemPrompt });
   for (let i = history.length - 1; i >= 0; i--) {
     const h = history[i]!;
-    let content = h.content;
+    let content = limits.maxInputChars && h.content.length > limits.maxInputChars ? h.content.slice(0, limits.maxInputChars) + "…" : h.content;
     const images: ChatImage[] = [];
     for (const a of h.attachments) {
       if (a.kind === "text") {
@@ -172,7 +186,7 @@ export async function prepareChat(userId: string, plan: Plan, input: ChatInput, 
   }
   const lastUserText = input.content || history.filter((h) => h.role === "user").pop()?.content || "";
 
-  return { conversation, userMessageId, targets, role, webSearch, agent, contextMessages, lastUserText, isNew: !input.conversationId };
+  return { conversation, userMessageId, targets, role, webSearch, agent, contextMessages, lastUserText, isNew: !input.conversationId, maxOutputTokens: limits.maxOutputTokens };
 }
 
 /** Executes the prepared request against the routed provider(s), streaming events to the client. */
@@ -250,7 +264,7 @@ export async function executeChat(
             messages: target.model.supportsVision ? prep.contextMessages : prep.contextMessages.map((m) => ({ ...m, images: undefined })),
             webSearch: prep.webSearch && target.model.supportsWebSearch,
             reasoning: input.think,
-            maxTokens: target.model.maxOutputTokens ? Math.min(target.model.maxOutputTokens, 16384) : undefined,
+            maxTokens: prep.maxOutputTokens ?? (target.model.maxOutputTokens ? Math.min(target.model.maxOutputTokens, 16384) : undefined),
             signal,
           });
           for await (const chunk of stream) {
@@ -334,11 +348,13 @@ export async function executeChat(
       },
     });
   }
+  const result = { status, costUsd: providerCost ?? estimated ?? null };
   if (errMsg) {
     emit({ type: "error", error: friendlyError(errMsg), messageId: assistant.id });
   } else {
     emit({ type: "done", status, messageId: assistant.id, usage: { promptTokens: usage.promptTokens ?? null, completionTokens: usage.completionTokens ?? null }, costUsd: providerCost ?? estimated ?? null, model: { id: final.model.id, name: final.model.displayName }, fallback: Boolean(used?.isFallback) });
   }
+  return result;
 }
 
 function friendlyError(msg: string) {

@@ -10,6 +10,7 @@ import { isOwnerAccount } from "@/lib/access";
 import { getUserPlan } from "@/lib/plans";
 import { rateLimit } from "@/lib/rate-limit";
 import { getSettings } from "@/lib/settings";
+import { getTrialSettings, isTrialUser, refundTrialMessage, takeTrialMessage, trialLabel, trialModelRows } from "@/lib/trial";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -34,6 +35,7 @@ export async function POST(req: Request) {
   let prep: Awaited<ReturnType<typeof prepareChat>>;
   let userId: string;
   let input: z.infer<typeof schema>;
+  let trialTaken = false;
   try {
     const user = await requireUser();
     userId = user.id;
@@ -47,7 +49,29 @@ export async function POST(req: Request) {
     if (!input.agent && canAgent && resolveMentions(input.content, CONNECTOR_PRESETS.map((p) => ({ slug: p.key, name: p.name }))).length) input.agent = true;
     if (input.agent && !isOwnerAccount(user) && user.role !== "ADMIN" && user.role !== "OWNER") throw new HttpError(403, "وضع الوكيل متاح للمالك فقط.", "agent_owner_only");
     const { plan } = await getUserPlan(user.id);
-    prep = await prepareChat(user.id, plan, input, settings);
+    if (isTrialUser(user) && !isOwnerAccount(user)) {
+      // free trial: plain chat only, allowed cheap models only, one message taken atomically from the account
+      const t = await getTrialSettings();
+      const rows = await trialModelRows(t);
+      if (!rows.length) throw new HttpError(503, "التجربة المجانية مو متاحة الحين، جرّب بعد شوي.", "trial_off");
+      if (input.attachmentIds.length) throw new HttpError(403, "رفع الملفات للمشتركين بس.", "trial_feature");
+      input.agent = false;
+      input.think = false;
+      input.webSearch = false;
+      if (!input.modelId || !rows.some((r) => r.id === input.modelId)) input.modelId = rows[0]!.id;
+      await takeTrialMessage(user.id, t);
+      trialTaken = true;
+      try {
+        prep = await prepareChat(user.id, plan, input, { ...settings, maxHistoryMessages: Math.min(settings.maxHistoryMessages, t.historyMessages) }, { maxOutputTokens: t.maxOutputTokens, maxInputChars: t.maxInputChars });
+      } catch (e) {
+        await refundTrialMessage(user.id);
+        throw e;
+      }
+      // trial users only ever see the friendly Saudi names (also stored on the message)
+      for (const tg of prep.targets) tg.model.displayName = trialLabel(t, tg.model.modelId, tg.model.displayName);
+    } else {
+      prep = await prepareChat(user.id, plan, input, settings);
+    }
   } catch (e) {
     return errorResponse(e);
   }
@@ -57,7 +81,9 @@ export async function POST(req: Request) {
   const job = new ChatJob();
   const work = (async () => {
     try {
-      await executeChat(userId, prep, input, job.emit, job.controller.signal);
+      const r = await executeChat(userId, prep, input, job.emit, job.controller.signal);
+      // a trial message that produced nothing (provider error) is given back
+      if (trialTaken && r.status === "error") await refundTrialMessage(userId);
     } catch (e) {
       console.error("[chat] run failure", e);
       job.emit({ type: "error", error: "صار خطأ غير متوقع في الخادم أثناء توليد الرد." });

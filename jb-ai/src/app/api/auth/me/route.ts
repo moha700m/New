@@ -1,6 +1,7 @@
 import { getCurrentUser, isAdminRole, needsVerification } from "@/lib/auth";
 import { handler, json } from "@/lib/http";
 import { effectiveUploadMb, getUserPlan, usageSummary } from "@/lib/plans";
+import { trialStatus } from "@/lib/trial";
 
 export const dynamic = "force-dynamic";
 
@@ -25,5 +26,6 @@ export const GET = handler(async () => {
       ? { status: subscription.status, interval: subscription.interval, currentPeriodEnd: subscription.currentPeriodEnd, cancelAtPeriodEnd: subscription.cancelAtPeriodEnd, planId: subscription.planId }
       : null,
     usage,
+    trial: user.access === "trial" ? await trialStatus(user.id) : null,
   });
 });

@@ -68,6 +68,12 @@ model User {
   role            Role      @default(USER)
   emailVerifiedAt DateTime?
   disabled        Boolean   @default(false)
+  /// null = regular account; "trial" = free-trial account (5 messages); "full" = manually upgraded (unlimited)
+  access          String?
+  /// normalized email (gmail dots/+tags removed) — one trial account per person
+  emailCanonical  String?   @unique
+  trialUsed       Int       @default(0)
+  signupIp        String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 

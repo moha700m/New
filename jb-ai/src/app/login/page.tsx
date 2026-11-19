@@ -50,14 +50,14 @@ export default function LoginPage() {
   useEffect(() => {
     fetch("/api/config", { cache: "no-store" })
       .then((r) => r.json())
-      .then((c) => setRegistrationOpen(Boolean(c?.site?.registrationOpen)))
+      .then((c) => setRegistrationOpen(Boolean(c?.site?.registrationOpen || c?.trialEnabled)))
       .catch(() => {});
   }, []);
   return (
     <AuthShell
       title="أهلًا بعودتك"
       subtitle={registrationOpen ? "سجّل دخولك لمتابعة محادثاتك." : "الموقع خاص — سجّل دخولك للمتابعة."}
-      footer={registrationOpen ? <>ليس لديك حساب؟ <Link href="/register" className="text-brand-400">سجّل مجانًا</Link></> : undefined}
+      footer={registrationOpen ? <>ليس لديك حساب؟ <Link href="/register" className="font-semibold text-brand-400" data-testid="trial-register-link">جرّب مجانًا</Link></> : undefined}
     >
       <Suspense>
         <LoginForm />

@@ -3,6 +3,7 @@ import type { Plan } from "@prisma/client";
 import { isOwnerAccount } from "./access";
 import { prisma } from "./db";
 import { HttpError } from "./http";
+import { getTrialSettings, trialPlan } from "./trial";
 
 export async function getDefaultPlan(): Promise<Plan> {
   const p = (await prisma.plan.findFirst({ where: { isDefault: true } })) ?? (await prisma.plan.findFirst({ orderBy: { sortOrder: "asc" } }));
@@ -33,9 +34,12 @@ async function ownerUnlimitedPlan(): Promise<Plan> {
 export async function getUserPlan(userId: string) {
   const [sub, user] = await Promise.all([
     prisma.subscription.findUnique({ where: { userId }, include: { plan: true } }),
-    prisma.user.findUnique({ where: { id: userId }, select: { role: true, email: true } }),
+    prisma.user.findUnique({ where: { id: userId }, select: { role: true, email: true, access: true } }),
   ]);
   if (user && isOwnerAccount(user)) return { plan: await ownerUnlimitedPlan(), subscription: sub };
+  // manually upgraded by the owner: every model, no limits (agent/connectors stay owner-only)
+  if (user?.access === "full") return { plan: { ...(await ownerUnlimitedPlan()), key: "full", name: "الاشتراك الكامل" }, subscription: sub };
+  if (user?.access === "trial") return { plan: trialPlan(), subscription: sub };
   const now = new Date();
   if (sub && (sub.status === "ACTIVE" || sub.status === "TRIALING" || sub.status === "PAST_DUE")) {
     if (!sub.currentPeriodEnd || sub.currentPeriodEnd > now) return { plan: sub.plan, subscription: sub };
@@ -47,6 +51,10 @@ export async function getUserPlan(userId: string) {
 
 export async function planAllowsModel(plan: Plan, modelRowId: string) {
   if (plan.allowAllModels) return true;
+  if (plan.key === "trial") {
+    const [t, m] = await Promise.all([getTrialSettings(), prisma.aiModel.findUnique({ where: { id: modelRowId }, select: { modelId: true, supportsImageGeneration: true } })]);
+    return Boolean(m && !m.supportsImageGeneration && t.models.includes(m.modelId));
+  }
   const row = await prisma.planModel.findUnique({ where: { planId_modelId: { planId: plan.id, modelId: modelRowId } } });
   return Boolean(row);
 }

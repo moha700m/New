@@ -19,6 +19,6 @@ export async function rateLimit(key: string, limit: number, windowMs: number) {
   }
   if (row.count > limit) {
     const retry = Math.max(1, Math.ceil((windowStart.getTime() + windowMs - now) / 1000));
-    throw new HttpError(429, `طلبات كثيرة. حاول مرة أخرى بعد ${retry} ثانية.`, "rate_limited");
+    throw new HttpError(429, `طلبات كثير، جرّب بعد ${retry} ثانية.`, "rate_limited");
   }
 }
