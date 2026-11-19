@@ -33,7 +33,7 @@ export default function RegisterPage() {
     return (
       <AuthShell title="تحقّق من بريدك ✉️" subtitle="أرسلنا لك رابط تأكيد. افتحه وتقدر تبدأ تجربتك المجانية على طول.">
         <div className="space-y-3 text-sm leading-7 text-slate-300" data-testid="trial-check-email">
-          <p>ما وصلك؟ شيّك على مجلد «غير المرغوب» (Spam)، وإذا ما لقيته اضغط تحت.</p>
+          <p>إذا ما لقيت الإيميل شوف مجلد الغير مرغوب (Spam)، وإذا ما لقيته اضغط تحت.</p>
           <button
             type="button"
             className="btn-outline w-full justify-center"

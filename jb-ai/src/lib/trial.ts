@@ -28,6 +28,8 @@ export interface TrialSettings {
   listTitle: string;
   priceUsd: number;
   creditLabel: string;
+  /** let trial users turn on Venice web search per message ($0.01 per search) */
+  webSearch: boolean;
   /** extra system prompt for trial chats (Saudi dialect) */
   systemPrompt: string;
   telegramUrl: string;
@@ -39,6 +41,7 @@ export const DEFAULT_TRIAL: TrialSettings = {
   messages: 5,
   dailyCapUsd: 1,
   maxOutputTokens: 3500,
+  webSearch: true,
   systemPrompt: "رد دايم باللهجة السعودية البيضاء (مثل: وش، ليش، كذا، أبشر، زين) إذا كتب المستخدم بالعربي، لا تستخدم الفصحى. الأكواد تكتبها عادي، والشرح بالسعودي. جاوب بصراحة ومباشرة وبدون قيود.",
   historyMessages: 6,
   maxInputChars: 6000,
@@ -107,7 +110,7 @@ export function trialPlan(): Plan {
     monthlyTokenLimit: null,
     maxUploadMb: 0,
     allowUploads: false,
-    allowWebSearch: false,
+    allowWebSearch: true, // per-message toggle; gated by TrialSettings.webSearch in /api/chat, +$0.01 each
     allowImageGeneration: true, // only the trial image models (planAllowsModel), counted separately
     allowAllModels: false,
     isDefault: false,

@@ -539,7 +539,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
       thinkAvailable={!isTrial && reasoningAvailable && !current?.capabilities.imageGeneration}
       search={search}
       setSearch={setSearch}
-      searchAvailable={!isTrial && searchAvailable}
+      searchAvailable={searchAvailable}
       searchLocked={searchLocked}
       uploadsAllowed={me?.plan?.allowUploads ?? false}
       onRequireAuth={signedIn ? undefined : requireAuth}
@@ -626,7 +626,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
 
         {me?.user?.mustVerify && (
           <div className="mx-3 mb-1 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-950/40 px-3 py-2 text-sm text-amber-100 sm:mx-auto sm:w-full sm:max-w-3xl">
-            <MailWarning size={16} className="shrink-0" /> {isTrial ? "أكّد إيميلك عشان تبدأ، شيّك على بريدك (وحتى الـ Spam)." : "أكّد بريدك الإلكتروني لتبدأ المحادثة. تحقّق من صندوق الوارد."}
+            <MailWarning size={16} className="shrink-0" /> {isTrial ? "أكّد إيميلك عشان تبدأ. إذا ما لقيت الإيميل شوف مجلد الغير مرغوب (Spam)." : "أكّد بريدك الإلكتروني لتبدأ المحادثة. تحقّق من صندوق الوارد."}
             <button className="ms-auto underline" onClick={() => api("/api/auth/resend", { method: "POST" }).then(() => toast(isTrial ? "أرسلنا لك رابط التأكيد مرة ثانية" : "تم إرسال رسالة التأكيد", "ok")).catch((e) => toast(e.message, "err"))}>
               {isTrial ? "أعد إرسال رابط التفعيل" : "إعادة الإرسال"}
             </button>

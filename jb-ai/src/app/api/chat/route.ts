@@ -58,7 +58,7 @@ export async function POST(req: Request) {
       if (input.attachmentIds.length) throw new HttpError(403, "رفع الملفات للمشتركين بس.", "trial_feature");
       input.agent = false;
       input.think = false;
-      input.webSearch = false;
+      input.webSearch = Boolean(input.webSearch && t.webSearch);
       trialImage = Boolean(input.modelId && imageRows.some((r) => r.id === input.modelId));
       if (!trialImage && (!input.modelId || !rows.some((r) => r.id === input.modelId))) input.modelId = rows[0]!.id;
       // text messages and free images are two separate quotas

@@ -310,7 +310,10 @@ export async function executeChat(
   const status = stopped ? "stopped" : used ? "complete" : "error";
   const errMsg = !used && !stopped ? lastError?.message ?? "لم يستجب مزوّد الذكاء الاصطناعي." : null;
   const providerCost = usage.costUsd;
-  const estimated = providerCost == null ? estimateCost(final.model, usage.promptTokens, usage.completionTokens) : null;
+  const baseEstimate = providerCost == null ? estimateCost(final.model, usage.promptTokens, usage.completionTokens) : null;
+  // Venice bills web search on top of tokens: $10 / 1,000 requests
+  const searchFee = used && prep.webSearch && final.model.supportsWebSearch && final.model.provider.type === "VENICE" ? 0.01 : 0;
+  const estimated = baseEstimate != null ? baseEstimate + searchFee : searchFee || null;
 
   // updateMany: the message may have been deleted meanwhile (chat deleted / edited / regenerated while streaming)
   await prisma.message.updateMany({

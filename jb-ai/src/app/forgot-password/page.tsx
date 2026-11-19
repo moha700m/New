@@ -11,7 +11,7 @@ export default function ForgotPage() {
   return (
     <AuthShell title="نسيت كلمة السر؟" subtitle="اكتب إيميلك ونرسل لك رابط تغيّر فيه كلمة السر." footer={<Link href="/login" className="text-brand-400">ارجع لتسجيل الدخول</Link>}>
       {sent ? (
-        <p className="text-sm text-slate-300">أرسلنا رابط تغيير كلمة السر على <b><bdi dir="ltr">{email}</bdi></b>. الرابط يشتغل ساعة وحدة، وإذا ما لقيته شيّك على مجلد «غير المرغوب» (Spam).</p>
+        <p className="text-sm text-slate-300">أرسلنا رابط تغيير كلمة السر على <b><bdi dir="ltr">{email}</bdi></b>. الرابط يشتغل ساعة وحدة. إذا ما لقيت الإيميل شوف مجلد الغير مرغوب (Spam).</p>
       ) : (
         <form
           className="space-y-4"
@@ -32,6 +32,7 @@ export default function ForgotPage() {
             <input id="email" dir="ltr" className="input text-start" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
           <button className="btn-primary w-full">أرسل لي الرابط</button>
+          <p className="text-center text-xs text-slate-400">إذا ما لقيت الإيميل شوف مجلد الغير مرغوب (Spam)</p>
         </form>
       )}
     </AuthShell>

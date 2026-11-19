@@ -259,6 +259,17 @@ export function Composer(props: {
             {props.connectorsCount ? <span className="rounded-full bg-emerald-500/20 px-1.5 text-[11px] font-semibold text-emerald-300">{props.connectorsCount}</span> : null}
           </button>
         )}
+        {props.plainChat && props.searchAvailable && !props.imageMode && (
+          <button
+            type="button"
+            className={`flex h-9 items-center gap-1 rounded-full border px-3 text-[13px] ${props.search ? "border-brand-500/50 bg-brand-500/15 text-brand-400" : "border-ink-500 text-slate-300 hover:bg-ink-700"}`}
+            onClick={() => props.setSearch(!props.search)}
+            aria-pressed={props.search}
+            data-testid="trial-search-toggle"
+          >
+            <Globe size={15} /> ابحث في النت
+          </button>
+        )}
         <div className="flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
           {props.agent && props.setAgent && <Chip icon={Bot} label="وكيل" cls="bg-sky-500/15 text-sky-300 ring-1 ring-sky-500/30" onOff={() => props.setAgent!(false)} />}
           {props.imageMode && props.onToggleImage && <Chip icon={ImageIcon} label="صورة" cls="bg-fuchsia-500/15 text-fuchsia-300" onOff={props.onToggleImage} />}

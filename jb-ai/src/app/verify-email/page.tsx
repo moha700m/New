@@ -24,7 +24,12 @@ function Verify() {
   }, [token]);
   if (state === "pending") return <p className="text-sm text-slate-400">لحظة نأكّد إيميلك…</p>;
   if (state === "ok") return <p className="text-sm text-slate-300">تم تأكيد إيميلك ✓ <Link className="text-brand-400" href="/">ابدأ تجربتك ←</Link></p>;
-  return <p className="text-sm text-red-300">{msg}</p>;
+  return (
+    <div className="space-y-2">
+      <p className="text-sm text-red-300">{msg}</p>
+      <p className="text-xs text-slate-400">اطلب رابط جديد من صفحة المحادثة. إذا ما لقيت الإيميل شوف مجلد الغير مرغوب (Spam).</p>
+    </div>
+  );
 }
 
 export default function VerifyPage() {
