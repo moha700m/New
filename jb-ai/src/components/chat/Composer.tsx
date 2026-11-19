@@ -36,6 +36,8 @@ export function Composer(props: {
   uploadsAllowed: boolean;
   onRequireAuth?: () => void;
   autoFocus?: boolean;
+  /** free-trial accounts: plain text chat only (no attach/agent/connectors menu) */
+  plainChat?: boolean;
   imageMode?: boolean;
   onToggleImage?: () => void;
   agent?: boolean;
@@ -217,7 +219,7 @@ export function Composer(props: {
       />
       <div className="flex items-center gap-1 px-2 pb-2 pt-1">
         <input ref={fileRef} type="file" multiple hidden onChange={(e) => e.target.files && upload(e.target.files).then(() => (e.target.value = ""))} />
-        <div className="relative" ref={menuRef}>
+        <div className={`relative ${props.plainChat ? "hidden" : ""}`} ref={menuRef}>
           <button
             className={`flex h-9 w-9 items-center justify-center rounded-full border border-ink-500 text-slate-200 hover:bg-ink-700 ${menu ? "bg-ink-700" : ""}`}
             onClick={() => (props.onRequireAuth ? props.onRequireAuth() : setMenu((m) => !m))}

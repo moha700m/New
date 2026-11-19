@@ -515,6 +515,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
   const composer = (
     <Composer
       onSend={send}
+      plainChat={isTrial}
       mentionItems={isAdmin && agentAvailable ? mentionCatalog.items : undefined}
       modes={signedIn ? modeOptions : undefined}
       activeMode={activeMode}

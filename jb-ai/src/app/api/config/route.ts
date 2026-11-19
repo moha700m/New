@@ -28,7 +28,7 @@ export const GET = handler(async () => {
       // friendly Saudi names only — the real model ids stay server-side
       .map((m) => {
         const l = t.labels[byId.get(m.id) ?? ""];
-        return { ...m, name: l?.name ?? m.name, description: l?.desc ?? m.description, capabilities: { ...m.capabilities, uncensored: true, reasoning: false, imageGeneration: false } };
+        return { ...m, name: l?.name ?? m.name, description: l?.desc ?? m.description, category: "TEXT" as typeof m.category, capabilities: { ...m.capabilities, uncensored: true, reasoning: false, imageGeneration: false, vision: false, webSearch: false, tools: false, code: false } };
       });
     defaults = { text: ids[0] ?? null, reasoning: null, code: null, vision: null, image: null };
   }
