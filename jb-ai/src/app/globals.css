@@ -1,0 +1,92 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: dark; }
+html, body { height: 100%; }
+/* Native-app feel on phones: no double-tap zoom, no rubber-band, no sideways scroll */
+html, body {
+  overflow-x: hidden;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  max-width: 100vw;
+}
+/* iOS zooms into any focused field under 16px: keep every field at 16px on touch screens */
+@media (pointer: coarse), (max-width: 767px) {
+  input, textarea, select, .input { font-size: 16px !important; }
+}
+img, video, svg, canvas, iframe, table, pre { max-width: 100%; }
+body {
+  @apply bg-ink-950 text-slate-100 antialiased;
+  background-image: radial-gradient(1200px 600px at 50% 110%, rgba(56, 89, 160, 0.22), transparent 60%), linear-gradient(180deg, #050812 0%, #081024 100%);
+  background-attachment: fixed;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+:lang(ar) { letter-spacing: 0; text-transform: none; font-style: normal; }
+.prose-chat, .msg-text { line-height: 1.8; }
+/* Code, keys, emails and URLs always read left-to-right */
+pre, code, kbd, .ltr { direction: ltr; unicode-bidi: isolate; }
+* { scrollbar-width: thin; scrollbar-color: #1d2846 transparent; }
+::selection { background: rgba(91, 140, 255, 0.35); }
+
+@layer components {
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50; }
+  .btn-primary { @apply btn bg-white text-ink-950 hover:bg-slate-200; }
+  .btn-brand { @apply btn bg-brand-500 text-white hover:bg-brand-600; }
+  .btn-outline { @apply btn border border-ink-500 text-slate-100 hover:bg-ink-700; }
+  .btn-ghost { @apply btn text-slate-300 hover:bg-ink-700 hover:text-white; }
+  .btn-danger { @apply btn bg-red-600/90 text-white hover:bg-red-600; }
+  .input { @apply w-full rounded-lg border border-ink-500 bg-ink-850 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/50; }
+  .label { @apply mb-1 block text-[13px] font-medium text-slate-400; }
+  .card { @apply rounded-xl border border-ink-600 bg-ink-850/80 p-5; }
+  .badge { @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold; }
+}
+
+/* highlight.js (github-dark-ish) */
+.hljs { color: #c9d1d9; }
+.hljs-comment, .hljs-quote { color: #8b949e; font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-type { color: #ff7b72; }
+.hljs-string, .hljs-regexp, .hljs-addition { color: #a5d6ff; }
+.hljs-number, .hljs-symbol, .hljs-bullet, .hljs-variable, .hljs-template-variable { color: #79c0ff; }
+.hljs-title, .hljs-title.function_, .hljs-section { color: #d2a8ff; }
+.hljs-attr, .hljs-attribute, .hljs-name, .hljs-selector-id, .hljs-selector-class { color: #7ee787; }
+.hljs-built_in, .hljs-meta { color: #ffa657; }
+.hljs-deletion { color: #ffa198; }
+
+.prose-chat { @apply prose prose-invert max-w-none prose-p:leading-8 prose-pre:my-0 prose-pre:bg-transparent prose-pre:p-0 prose-code:before:content-none prose-code:after:content-none prose-a:text-brand-400 prose-headings:font-semibold prose-table:text-sm; }
+.prose-chat :not(pre) > code { @apply rounded bg-ink-700 px-1.5 py-0.5 text-[0.85em] text-slate-100; }
+.prose-chat ul, .prose-chat ol { padding-inline-start: 1.4em; padding-left: 0; }
+.typing-cursor::after { content: "▍"; @apply ms-0.5 animate-pulse text-brand-400; }
+
+/* Owner's artwork behind the chat (messages area only). Absolute inside <main> (isolate), so it never scrolls, zooms or overflows. */
+.chat-bg {
+  position: absolute;
+  inset: 0;
+  z-index: -10;
+  pointer-events: none;
+  background-image: url("/chat-bg.jpg");
+  background-image: image-set(url("/chat-bg.webp") type("image/webp"), url("/chat-bg.jpg") type("image/jpeg"));
+  background-repeat: no-repeat;
+  background-position: center 55%;
+  background-size: min(80vmin, 700px);
+  opacity: 0.42;
+  /* Feather the artwork's black square so no hard edges show on the page gradient */
+  -webkit-mask-image: radial-gradient(circle closest-side, #000 62%, transparent 100%);
+  mask-image: radial-gradient(circle closest-side, #000 62%, transparent 100%);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center 55%;
+  mask-position: center 55%;
+  -webkit-mask-size: min(80vmin, 700px) min(80vmin, 700px);
+  mask-size: min(80vmin, 700px) min(80vmin, 700px);
+}
+.chat-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(5, 8, 18, 0.05) 0%, rgba(5, 8, 18, 0.35) 70%, rgba(5, 8, 18, 0.7) 100%);
+}
+@media (max-width: 640px) { .chat-bg { background-size: min(100vw, 100%); background-position: center; opacity: 0.38; -webkit-mask-position: center; mask-position: center; -webkit-mask-size: min(100vw, 100%) min(100vw, 100%); mask-size: min(100vw, 100%) min(100vw, 100%); } }
