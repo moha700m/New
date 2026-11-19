@@ -36,17 +36,18 @@ export const DEFAULT_TRIAL: TrialSettings = {
   requireVerification: true,
   messages: 5,
   dailyCapUsd: 1,
-  maxOutputTokens: 1500,
+  maxOutputTokens: 3500,
   historyMessages: 6,
   maxInputChars: 6000,
-  // cheapest uncensored Venice text models (in / out $ per 1M tokens): 0.07/0.40, 0.1625/0.50, 0.165/0.55, 0.20/0.90
-  models: ["olafangensan-glm-4.7-flash-heretic", "gemma-4-uncensored", "glm-5-3-flash-uncensored", "venice-uncensored-1-2"],
+  // ONE trial text model: Venice's own app default — DeepSeek V4.1 Flash Uncensored, code-optimised ($0.33 in / $1.32 out per 1M)
+  models: ["deepseek-v4-1-flash-1017-uncensored"],
   images: 2,
   // cheapest Venice image models ($0.01 / image), generated with safe_mode:false
   imageModels: ["lustify-v8", "z-image-turbo"],
   labels: {
+    "deepseek-v4-1-flash-1017-uncensored": { name: "الجريء", desc: "بدون قيود +١٨، يكتب لك أكواد ويجاوبك على كل شي" },
     "olafangensan-glm-4.7-flash-heretic": { name: "السريع", desc: "يرد عليك بسرعة البرق وبدون لف ودوران" },
-    "gemma-4-uncensored": { name: "الجريء", desc: "يقول اللي في خاطره بدون قيود ولا مجاملة" },
+    "gemma-4-uncensored": { name: "الجريء القديم", desc: "يقول اللي في خاطره بدون قيود ولا مجاملة" },
     "glm-5-3-flash-uncensored": { name: "الذكي", desc: "يفكّر زين ويفهمك من نص كلمة" },
     "venice-uncensored-1-2": { name: "الفلّة", desc: "يسولف معك على راحتك وما عنده خطوط حمرا" },
     "lustify-v8": { name: "الرسّام الجريء", desc: "يرسم لك اللي في بالك بدون قيود +١٨" },
