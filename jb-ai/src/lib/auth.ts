@@ -139,9 +139,9 @@ export async function sendPasswordResetEmail(user: { id: string; email: string }
   const link = appUrl(`/reset-password?token=${encodeURIComponent(token)}`);
   return sendMail(
     user.email,
-    `استعادة كلمة المرور في ${s.siteName}`,
-    `<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;line-height:1.8"><p>وصلنا طلب لاستعادة كلمة المرور لحسابك.</p><p><a href="${link}">اضغط هنا لاختيار كلمة مرور جديدة</a></p><p>صلاحية الرابط ساعة واحدة. إذا لم تطلب ذلك فتجاهل هذه الرسالة.</p></div>`,
-    `استعد كلمة المرور من هذا الرابط (صالح لمدة ساعة): ${link}`,
+    `غيّر كلمة السر في ${s.siteName}`,
+    `<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;line-height:1.8"><p>هلا، وصلنا طلب تغيير كلمة السر لحسابك.</p><p><a href="${link}">اضغط هنا واختر كلمة سر جديدة</a></p><p>الرابط يشتغل ساعة وحدة. إذا ما طلبت هالشي، تجاهل الرسالة.</p></div>`,
+    `غيّر كلمة السر من هالرابط (يشتغل ساعة): ${link}`,
   );
 }
 

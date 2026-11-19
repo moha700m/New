@@ -9,9 +9,9 @@ export default function ForgotPage() {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   return (
-    <AuthShell title="استعادة كلمة المرور" subtitle="سنرسل إلى بريدك رابطًا آمنًا لتعيين كلمة مرور جديدة." footer={<Link href="/login" className="text-brand-400">العودة لتسجيل الدخول</Link>}>
+    <AuthShell title="نسيت كلمة السر؟" subtitle="اكتب إيميلك ونرسل لك رابط تغيّر فيه كلمة السر." footer={<Link href="/login" className="text-brand-400">ارجع لتسجيل الدخول</Link>}>
       {sent ? (
-        <p className="text-sm text-slate-300">إذا كان هناك حساب مرتبط بالبريد <b><bdi dir="ltr">{email}</bdi></b> فسيصلك رابط الاستعادة قريبًا، وصلاحيته ساعة واحدة.</p>
+        <p className="text-sm text-slate-300">أرسلنا رابط تغيير كلمة السر على <b><bdi dir="ltr">{email}</bdi></b>. الرابط يشتغل ساعة وحدة، وإذا ما لقيته شيّك على مجلد «غير المرغوب» (Spam).</p>
       ) : (
         <form
           className="space-y-4"
@@ -28,10 +28,10 @@ export default function ForgotPage() {
         >
           <FormError error={error} />
           <div>
-            <label className="label" htmlFor="email">البريد الإلكتروني</label>
+            <label className="label" htmlFor="email">إيميلك</label>
             <input id="email" dir="ltr" className="input text-start" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
-          <button className="btn-primary w-full">إرسال رابط الاستعادة</button>
+          <button className="btn-primary w-full">أرسل لي الرابط</button>
         </form>
       )}
     </AuthShell>

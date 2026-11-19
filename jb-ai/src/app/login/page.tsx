@@ -36,7 +36,7 @@ function LoginForm() {
       <div>
         <div className="flex items-center justify-between">
           <label className="label" htmlFor="password">كلمة المرور</label>
-          <Link href="/forgot-password" className="mb-1 text-xs text-brand-400">نسيت كلمة المرور؟</Link>
+          <Link href="/forgot-password" className="mb-1 text-xs text-brand-400">نسيت كلمة السر؟</Link>
         </div>
         <input id="password" dir="ltr" className="input text-start" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
       </div>

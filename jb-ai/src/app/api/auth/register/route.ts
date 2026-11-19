@@ -46,7 +46,7 @@ export const POST = handler(async (req: Request) => {
     });
   }
   const exists = await prisma.user.findFirst({ where: { OR: [{ email: body.email }, { emailCanonical: canonical }] } });
-  if (exists) throw new HttpError(409, "يوجد حساب مسجّل بهذا البريد الإلكتروني");
+  if (exists) throw new HttpError(409, "عندك حساب بهالإيميل من قبل، سجّل دخولك.");
   const user = await prisma.user.create({
     data: {
       email: body.email,
