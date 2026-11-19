@@ -31,7 +31,7 @@ export const GET = handler(async () => {
       .map((m) => {
         const l = t.labels[byId.get(m.id) ?? ""];
         const isImage = imageIds.includes(m.id);
-        return { ...m, name: l?.name ?? m.name, description: l?.desc ?? m.description, category: (isImage ? "IMAGE" : "TEXT") as typeof m.category, capabilities: { ...m.capabilities, uncensored: true, reasoning: false, imageGeneration: isImage, vision: false, webSearch: false, tools: false, code: false } };
+        return { ...m, name: l?.name ?? m.name, description: l?.desc ?? m.description, category: (isImage ? "IMAGE" : "TEXT") as typeof m.category, capabilities: { ...m.capabilities, uncensored: true, reasoning: false, imageGeneration: isImage, vision: false, webSearch: !isImage && t.webSearch && m.capabilities.webSearch, tools: false, code: false } };
       });
     defaults = { text: textIds[0] ?? null, reasoning: null, code: null, vision: null, image: imageIds[0] ?? null };
   }
