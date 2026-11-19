@@ -212,7 +212,7 @@ export function Composer(props: {
             submit();
           }
         }}
-        placeholder={props.placeholder ?? (props.mentionItems?.length ? "اسأل أي شيء — اكتب @ لأداة أو مكان نشر" : "اسأل أي شيء")}
+        placeholder={props.placeholder ?? (props.mentionItems?.length ? "اسأل أي شيء — اكتب @ لأداة أو مكان نشر" : "اسألني أي شي")}
         dir="auto"
         className="block max-h-60 w-full resize-none bg-transparent px-4 pb-1 pt-3.5 text-[15px] text-slate-100 outline-none placeholder:text-slate-500"
         data-testid="composer-input"

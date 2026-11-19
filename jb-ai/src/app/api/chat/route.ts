@@ -41,8 +41,8 @@ export async function POST(req: Request) {
     const user = await requireUser();
     userId = user.id;
     const settings = await getSettings();
-    if (settings.maintenanceMode) throw new HttpError(503, "الخدمة تحت الصيانة. يرجى المحاولة لاحقًا.");
-    if (await needsVerification(user)) throw new HttpError(403, "يرجى تأكيد بريدك الإلكتروني قبل بدء المحادثة.", "email_unverified");
+    if (settings.maintenanceMode) throw new HttpError(503, "الموقع تحت الصيانة الحين، ارجع بعد شوي.");
+    if (await needsVerification(user)) throw new HttpError(403, "أكّد إيميلك أول عشان تبدأ السوالف.", "email_unverified");
     input = await parseBody(req, schema);
     if (!isOwnerAccount(user)) await rateLimit(`chat:${user.id}`, settings.chatRateLimitPerMinute, 60_000);
     const canAgent = isOwnerAccount(user) || user.role === "ADMIN" || user.role === "OWNER";

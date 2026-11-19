@@ -104,7 +104,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
       try {
         localStorage.removeItem(MODEL_KEY);
       } catch {}
-      toast(`النموذج الذي اخترته لم يعد متاحًا${fallbackName ? ` — تم التحويل إلى ${fallbackName}` : ""}.`, "info");
+      toast(`النموذج اللي اخترته ما عاد متاح${fallbackName ? ` — تم التحويل إلى ${fallbackName}` : ""}.`, "info");
     }
   }, [config, selectedModel, signedIn, toast, loadMe]);
 
@@ -278,7 +278,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
         const res = await fetch(`/api/chat/stream/${ref.id}?after=${ref.seq}`, { signal: conn.signal, cache: "no-store" });
         if (res.status === 404 || res.status === 401) {
           if (res.status === 401) router.push("/login");
-          patchMessage(ref.id, (m) => ({ ...m, status: m.status === "streaming" ? "error" : m.status, error: "تعذّر متابعة الرد.", live: null }));
+          patchMessage(ref.id, (m) => ({ ...m, status: m.status === "streaming" ? "error" : m.status, error: "ما قدرت أكمل الرد.", live: null }));
           return;
         }
         if (!res.ok || !res.body) throw new Error(String(res.status));
@@ -316,7 +316,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
         return;
       }
       if (!res.ok || !res.body) {
-        const d = await res.json().catch(() => ({ error: `تعذّر الطلب (${res.status})` }));
+        const d = await res.json().catch(() => ({ error: `ما مشى الطلب (${res.status})` }));
         if (d.code === "model_unavailable") setSelectedModel(null);
         if ((d.code === "trial_exhausted" || d.code === "trial_images_exhausted") && me?.trial) {
           // one quota is used up but the other may still be left: say so in the bubble; the card shows once both are gone
@@ -351,7 +351,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
       if (!ref.finished && !ref.id.startsWith("pending")) await follow(ref, ctrl.signal);
       else if (!ref.finished) patchMessage(ref.id, (m) => ({ ...m, status: "error", error: "انقطع الاتصال قبل ما يبدأ الرد. جرّب مرة ثانية.", live: null }));
     } catch (e) {
-      if ((e as Error).name !== "AbortError") patchMessage(ref.id, (m) => ({ ...m, status: "error", error: "انقطع الاتصال أثناء استلام الرد.", live: null }));
+      if ((e as Error).name !== "AbortError") patchMessage(ref.id, (m) => ({ ...m, status: "error", error: "انقطع الاتصال وأنا أستلم الرد.", live: null }));
     } finally {
       if (runRef.current === ref) runRef.current = null;
       setStreaming(false);
@@ -543,7 +543,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
       searchLocked={searchLocked}
       uploadsAllowed={me?.plan?.allowUploads ?? false}
       onRequireAuth={signedIn ? undefined : requireAuth}
-      placeholder={current?.capabilities.imageGeneration ? `صِف الصورة التي تريد إنشاءها (${current.name})` : agentOn ? "وش المهمة؟ اكتب @ لتختار أداة أو مكان النشر" : isAdmin ? "اسأل أي شيء — اكتب @ لأداة أو مكان نشر" : "اسأل أي شيء"}
+      placeholder={current?.capabilities.imageGeneration ? `وش الصورة اللي في بالك؟ (${current.name})` : agentOn ? "وش المهمة؟ اكتب @ لتختار أداة أو مكان النشر" : isAdmin ? "اسأل أي شيء — اكتب @ لأداة أو مكان نشر" : "اسألني أي شي"}
       imageMode={Boolean(current?.capabilities.imageGeneration)}
       agent={agentOn}
       setAgent={
@@ -633,11 +633,11 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
             </button>
           </div>
         )}
-        {config?.site.maintenanceMode && <div className="mx-auto mb-1 w-full max-w-3xl rounded-lg border border-amber-500/30 bg-amber-950/40 px-3 py-2 text-sm text-amber-100">الخدمة تحت الصيانة حاليًا. المحادثة غير متاحة مؤقتًا.</div>}
+        {config?.site.maintenanceMode && <div className="mx-auto mb-1 w-full max-w-3xl rounded-lg border border-amber-500/30 bg-amber-950/40 px-3 py-2 text-sm text-amber-100">الموقع تحت الصيانة الحين، ارجع بعد شوي.</div>}
 
         {empty ? (
           <div className="flex flex-1 flex-col items-center justify-center px-3 pb-24 sm:px-4">
-            <h1 className="text-center text-4xl font-medium sm:text-5xl">اسأل أي شيء</h1>
+            <h1 className="text-center text-4xl font-medium sm:text-5xl">اسألني أي شي</h1>
             <p className="mt-3 text-center text-[15px] text-slate-300 sm:text-base">{config?.site.tagline ?? "مساعدة في البرمجة، وأسئلة تقنية، وأكثر."}</p>
             <div className="mt-8 w-full max-w-3xl">{composerArea}</div>
             {config && !models.length && <p className="mt-4 text-sm text-slate-500">لا توجد نماذج مفعّلة بعد. على المسؤول تفعيل النماذج من مركز إدارة المحركات.</p>}
@@ -653,7 +653,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
               }}
             >
               <div className="mx-auto w-full max-w-3xl space-y-7 px-3 pb-8 pt-4 sm:px-4">
-                {loadingConv && <p className="text-center text-sm text-slate-500">جارٍ تحميل المحادثة…</p>}
+                {loadingConv && <p className="text-center text-sm text-slate-500">لحظة أفتح المحادثة…</p>}
                 {messages.map((m, i) => (
                   <MessageView
                     key={m.id}
@@ -668,7 +668,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
             </div>
             <div className="mx-auto w-full max-w-3xl px-3 pb-3 sm:px-4 sm:pb-4">
               {composerArea}
-              <p className="mt-2 text-center text-[11px] text-slate-500">قد يخطئ الذكاء الاصطناعي. تحقّق من المعلومات المهمة.</p>
+              <p className="mt-2 text-center text-[11px] text-slate-500">الذكاء الاصطناعي يغلط أحيانًا، تأكد من المعلومات المهمة.</p>
             </div>
           </>
         )}

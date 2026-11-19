@@ -115,7 +115,7 @@ export function MessageView({ m, isLast, canAct, onRegenerate, onEdit }: { m: Ui
     <div className="group" data-testid="msg-assistant">
       {(m.notice || m.usedFallback) && (
         <div className="mb-2 flex items-center gap-1.5 text-xs text-amber-300/90">
-          <Shuffle size={13} /> {m.notice || `أجاب النموذج الاحتياطي ${m.modelName ?? ""}`}
+          <Shuffle size={13} /> {m.notice || `ردّ النموذج الاحتياطي ${m.modelName ?? ""}`}
         </div>
       )}
       {m.reasoning && (
@@ -139,7 +139,7 @@ export function MessageView({ m, isLast, canAct, onRegenerate, onEdit }: { m: Ui
           <Markdown text={m.content} />
         </div>
       ) : streaming && !m.reasoning && !m.agentSteps?.length && !m.live ? (
-        <div className="flex h-7 items-center gap-1" aria-label="جارٍ التوليد">
+        <div className="flex h-7 items-center gap-1" aria-label="يجهّز…">
           {[0, 1, 2].map((i) => (
             <span key={i} className="h-2 w-2 animate-bounce rounded-full bg-slate-400" style={{ animationDelay: `${i * 0.15}s` }} />
           ))}
@@ -173,7 +173,7 @@ export function MessageView({ m, isLast, canAct, onRegenerate, onEdit }: { m: Ui
             </button>
           )}
           {isLast && canAct && (
-            <button className="btn-ghost p-1.5" onClick={onRegenerate} aria-label="إعادة توليد الرد" title="إعادة التوليد" data-testid="regenerate">
+            <button className="btn-ghost p-1.5" onClick={onRegenerate} aria-label="إعادة توليد الرد" title="عيد التوليد" data-testid="regenerate">
               <RefreshCw size={15} />
             </button>
           )}

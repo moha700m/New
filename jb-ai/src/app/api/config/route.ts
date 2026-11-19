@@ -45,6 +45,7 @@ export const GET = handler(async () => {
       ownerSignupOpen: isPrivateMode() && !user ? await ownerSignupOpen((emails) => prisma.user.count({ where: { email: { in: emails } } })) : false,
       trialSignupOpen: isPrivateMode() && !user ? trialRegistrationOpen(t) : false,
       trialEnabled: t.enabled,
+      trialCounts: t.enabled ? { messages: t.messages, images: t.images } : null,
       trialListTitle: planKey === "trial" ? t.listTitle : null,
       defaults,
       models: models.map((m) => ({ ...m, allowed: planKey === "trial" || planKey === "full" ? true : planKey ? m.plans.includes(planKey) : false })),

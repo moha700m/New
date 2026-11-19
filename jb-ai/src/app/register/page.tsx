@@ -12,10 +12,12 @@ export default function RegisterPage() {
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<"loading" | "open" | "owner" | "trial" | "soon">("loading");
   const [sent, setSent] = useState<null | boolean>(null);
+  const [counts, setCounts] = useState<{ messages: number; images: number }>({ messages: 5, images: 2 });
   useEffect(() => {
     fetch("/api/config", { cache: "no-store" })
       .then((r) => r.json())
       .then((c) => {
+        if (c?.trialCounts) setCounts(c.trialCounts);
         if (c?.site?.registrationOpen) setMode("open");
         else if (c?.ownerSignupOpen) setMode("owner");
         else if (c?.trialSignupOpen) setMode("trial");
@@ -45,7 +47,7 @@ export default function RegisterPage() {
   return (
     <AuthShell
       title={owner ? "إنشاء حساب المالك" : trial ? "جرّب «محمد | التقني» مجانًا" : "أنشئ حسابك"}
-      subtitle={owner ? "الموقع خاص. التسجيل متاح لبريد المالك فقط، ويُقفل تلقائيًا بعد إنشاء الحساب." : trial ? "عندك ٥ رسايل وصورتين مجانية بنماذج بدون قيود +١٨. سجّل بإيميلك الحقيقي وأكّده، وكل شخص له حساب واحد بس." : "مجاني دائمًا، ويمكنك الترقية في أي وقت."}
+      subtitle={owner ? "الموقع خاص. التسجيل متاح لبريد المالك فقط، ويُقفل تلقائيًا بعد إنشاء الحساب." : trial ? `عندك ${trialOffer(counts)} مجانية بنماذج بدون قيود +١٨. سجّل بإيميلك الحقيقي وأكّده، وكل شخص له حساب واحد بس.` : "مجاني دائمًا، ويمكنك الترقية في أي وقت."}
       footer={trial ? <>عندك حساب؟ <Link href="/login" className="text-brand-400">سجّل دخولك</Link></> : <>لديك حساب؟ <Link href="/login" className="text-brand-400">تسجيل الدخول</Link></>}
     >
       <form
@@ -82,4 +84,13 @@ export default function RegisterPage() {
       </form>
     </AuthShell>
   );
+}
+
+const ar = (n: number) => n.toLocaleString("ar-SA");
+/** «٥ رسايل وصورتين» — follows the admin trial settings. */
+function trialOffer({ messages, images }: { messages: number; images: number }) {
+  const m = messages === 1 ? "رسالة وحدة" : messages === 2 ? "رسالتين" : messages <= 10 ? `${ar(messages)} رسايل` : `${ar(messages)} رسالة`;
+  if (images <= 0) return m;
+  const i = images === 1 ? "صورة وحدة" : images === 2 ? "صورتين" : images <= 10 ? `${ar(images)} صور` : `${ar(images)} صورة`;
+  return `${m} و${i}`;
 }

@@ -83,7 +83,7 @@ export async function prepareChat(userId: string, plan: Plan, input: ChatInput, 
   const catalog = await getPublicCatalog();
   let requested = input.modelId ?? conversation?.modelId ?? null;
   if (requested && !catalog.models.some((m) => m.id === requested)) {
-    if (input.modelId) throw new HttpError(409, "النموذج المحدد لم يعد متاحًا. يرجى اختيار نموذج آخر.", "model_unavailable");
+    if (input.modelId) throw new HttpError(409, "النموذج اللي اخترته ما عاد متاح، اختر غيره.", "model_unavailable");
     requested = null; // conversation's old model was disabled → use current default
   }
   const requestedPublic = requested ? catalog.models.find((m) => m.id === requested) : undefined;
@@ -358,11 +358,11 @@ export async function executeChat(
 }
 
 function friendlyError(msg: string) {
-  if (/insufficient|balance|402/i.test(msg)) return "رفض مزوّد الذكاء الاصطناعي الطلب بسبب نفاد الرصيد لديه. تم تسجيل المشكلة في لوحة المحركات لدى المسؤول.";
-  if (/401|403|unauthori|invalid api key/i.test(msg)) return "رفض مزوّد الذكاء الاصطناعي مفتاح الوصول المُعدّ.";
-  if (/timed out/i.test(msg)) return "انتهت مهلة مزوّد الذكاء الاصطناعي. يرجى المحاولة مرة أخرى.";
-  if (/429/.test(msg)) return "مزوّد الذكاء الاصطناعي يحدّ من الطلبات حاليًا. حاول مرة أخرى بعد قليل.";
-  return "أرجع مزوّد الذكاء الاصطناعي خطأ: " + msg.replace(/^[^:]+:\s*/, "").slice(0, 200);
+  if (/insufficient|balance|402/i.test(msg)) return "المزوّد رفض الطلب لأن رصيده خلص — جرّب بعدين.";
+  if (/401|403|unauthori|invalid api key/i.test(msg)) return "المزوّد رفض مفتاح الوصول، جرّب بعدين.";
+  if (/timed out/i.test(msg)) return "المزوّد طوّل وما رد، جرّب مرة ثانية.";
+  if (/429/.test(msg)) return "الضغط عالي على المزوّد الحين، جرّب بعد شوي.";
+  return "المزوّد رجّع خطأ: " + msg.replace(/^[^:]+:\s*/, "").slice(0, 200);
 }
 
 export type { RouteTarget };
