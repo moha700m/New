@@ -6,7 +6,7 @@ import { getPublicCatalog } from "@/lib/engine";
 import { handler, json } from "@/lib/http";
 import { getUserPlan } from "@/lib/plans";
 import { getSettings } from "@/lib/settings";
-import { getTrialSettings, trialModelRows, trialRegistrationOpen } from "@/lib/trial";
+import { getTrialSettings, trialImageRows, trialModelRows, trialRegistrationOpen } from "@/lib/trial";
 
 export const dynamic = "force-dynamic";
 
@@ -19,18 +19,21 @@ export const GET = handler(async () => {
   let defaults: typeof catalog.defaults = isPrivateMode() && !user ? { text: null, reasoning: null, code: null, vision: null, image: null } : catalog.defaults;
   if (planKey === "trial") {
     // trial accounts only ever see their few allowed models
-    const rows = await trialModelRows(t);
-    const ids = rows.map((r) => r.id);
-    const byId = new Map(rows.map((r) => [r.id, r.modelId]));
+    const [rows, imageRows] = await Promise.all([trialModelRows(t), trialImageRows(t)]);
+    const textIds = rows.map((r) => r.id);
+    const imageIds = imageRows.map((r) => r.id);
+    const ids = [...textIds, ...imageIds];
+    const byId = new Map([...rows, ...imageRows].map((r) => [r.id, r.modelId]));
     models = catalog.models
       .filter((m) => ids.includes(m.id))
       .sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id))
       // friendly Saudi names only — the real model ids stay server-side
       .map((m) => {
         const l = t.labels[byId.get(m.id) ?? ""];
-        return { ...m, name: l?.name ?? m.name, description: l?.desc ?? m.description, category: "TEXT" as typeof m.category, capabilities: { ...m.capabilities, uncensored: true, reasoning: false, imageGeneration: false, vision: false, webSearch: false, tools: false, code: false } };
+        const isImage = imageIds.includes(m.id);
+        return { ...m, name: l?.name ?? m.name, description: l?.desc ?? m.description, category: (isImage ? "IMAGE" : "TEXT") as typeof m.category, capabilities: { ...m.capabilities, uncensored: true, reasoning: false, imageGeneration: isImage, vision: false, webSearch: false, tools: false, code: false } };
       });
-    defaults = { text: ids[0] ?? null, reasoning: null, code: null, vision: null, image: null };
+    defaults = { text: textIds[0] ?? null, reasoning: null, code: null, vision: null, image: imageIds[0] ?? null };
   }
   return json(
     {

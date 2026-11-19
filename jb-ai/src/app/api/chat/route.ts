@@ -10,7 +10,7 @@ import { isOwnerAccount } from "@/lib/access";
 import { getUserPlan } from "@/lib/plans";
 import { rateLimit } from "@/lib/rate-limit";
 import { getSettings } from "@/lib/settings";
-import { getTrialSettings, isTrialUser, refundTrialMessage, takeTrialMessage, trialLabel, trialModelRows } from "@/lib/trial";
+import { getTrialSettings, isTrialUser, refundTrialImage, refundTrialMessage, takeTrialImage, takeTrialMessage, trialImageRows, trialLabel, trialModelRows } from "@/lib/trial";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -36,6 +36,7 @@ export async function POST(req: Request) {
   let userId: string;
   let input: z.infer<typeof schema>;
   let trialTaken = false;
+  let trialImage = false;
   try {
     const user = await requireUser();
     userId = user.id;
@@ -52,19 +53,23 @@ export async function POST(req: Request) {
     if (isTrialUser(user) && !isOwnerAccount(user)) {
       // free trial: plain chat only, allowed cheap models only, one message taken atomically from the account
       const t = await getTrialSettings();
-      const rows = await trialModelRows(t);
+      const [rows, imageRows] = await Promise.all([trialModelRows(t), trialImageRows(t)]);
       if (!rows.length) throw new HttpError(503, "التجربة المجانية مو متاحة الحين، جرّب بعد شوي.", "trial_off");
       if (input.attachmentIds.length) throw new HttpError(403, "رفع الملفات للمشتركين بس.", "trial_feature");
       input.agent = false;
       input.think = false;
       input.webSearch = false;
-      if (!input.modelId || !rows.some((r) => r.id === input.modelId)) input.modelId = rows[0]!.id;
-      await takeTrialMessage(user.id, t);
+      trialImage = Boolean(input.modelId && imageRows.some((r) => r.id === input.modelId));
+      if (!trialImage && (!input.modelId || !rows.some((r) => r.id === input.modelId))) input.modelId = rows[0]!.id;
+      // text messages and free images are two separate quotas
+      if (trialImage) await takeTrialImage(user.id, t);
+      else await takeTrialMessage(user.id, t);
       trialTaken = true;
+      const refund = () => (trialImage ? refundTrialImage(user.id) : refundTrialMessage(user.id));
       try {
         prep = await prepareChat(user.id, plan, input, { ...settings, maxHistoryMessages: Math.min(settings.maxHistoryMessages, t.historyMessages) }, { maxOutputTokens: t.maxOutputTokens, maxInputChars: t.maxInputChars });
       } catch (e) {
-        await refundTrialMessage(user.id);
+        await refund();
         throw e;
       }
       // trial users only ever see the friendly Saudi names (also stored on the message)
@@ -83,7 +88,7 @@ export async function POST(req: Request) {
     try {
       const r = await executeChat(userId, prep, input, job.emit, job.controller.signal);
       // a trial message that produced nothing (provider error) is given back
-      if (trialTaken && r.status === "error") await refundTrialMessage(userId);
+      if (trialTaken && r.status === "error") await (trialImage ? refundTrialImage(userId) : refundTrialMessage(userId));
     } catch (e) {
       console.error("[chat] run failure", e);
       job.emit({ type: "error", error: "صار خطأ غير متوقع في الخادم أثناء توليد الرد." });

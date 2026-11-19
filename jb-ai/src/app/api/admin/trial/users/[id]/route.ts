@@ -18,7 +18,7 @@ export const POST = adminRoute<{ id: string }>(async ({ req, params, log }) => {
     const data =
       action === "full" ? { access: "full" }
       : action === "trial" ? { access: "trial" }
-      : action === "reset" ? { trialUsed: 0 }
+      : action === "reset" ? { trialUsed: 0, trialImagesUsed: 0 }
       : action === "verify" ? { emailVerifiedAt: u.emailVerifiedAt ?? new Date() }
       : action === "disable" ? { disabled: true }
       : { disabled: false };

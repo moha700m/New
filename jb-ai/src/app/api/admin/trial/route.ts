@@ -16,7 +16,7 @@ export const GET = adminRoute(async () => {
       where: { access: { in: ["trial", "full"] } },
       orderBy: { createdAt: "desc" },
       take: 500,
-      select: { id: true, email: true, name: true, access: true, trialUsed: true, emailVerifiedAt: true, disabled: true, createdAt: true, signupIp: true },
+      select: { id: true, email: true, name: true, access: true, trialUsed: true, trialImagesUsed: true, emailVerifiedAt: true, disabled: true, createdAt: true, signupIp: true },
     }),
     prisma.aiModel.findMany({
       where: { enabled: true, supportsText: true, supportsImageGeneration: false, provider: { type: "VENICE", enabled: true }, NOT: { modelId: { startsWith: "e2ee-" } } },
@@ -24,6 +24,14 @@ export const GET = adminRoute(async () => {
       orderBy: { outputPricePerM: "asc" },
     }),
   ]);
+  const imageRows = await prisma.aiModel.findMany({
+    where: { enabled: true, supportsImageGeneration: true, provider: { type: "VENICE", enabled: true } },
+    select: { id: true, modelId: true, displayName: true, extraCapabilities: true },
+  });
+  const imageModels = imageRows
+    .map((m) => ({ id: m.id, modelId: m.modelId, displayName: m.displayName, pricePerImageUsd: (m.extraCapabilities as { pricePerImageUsd?: number } | null)?.pricePerImageUsd ?? null }))
+    .filter((m) => m.pricePerImageUsd != null && m.pricePerImageUsd <= 0.02)
+    .sort((a, b) => (a.pricePerImageUsd ?? 0) - (b.pricePerImageUsd ?? 0));
   const uncensored = models.filter((m) => (m.extraCapabilities as { uncensored?: boolean } | null)?.uncensored || /uncensored|heretic|abliterat/i.test(m.modelId));
   const ids = users.map((u) => u.id);
   const spendByUser = ids.length
@@ -35,6 +43,7 @@ export const GET = adminRoute(async () => {
     today: { spendUsd: spend.usd, requests: spend.requests, capUsd: settings.dailyCapUsd },
     users: users.map((u) => ({ ...u, signupIp: u.signupIp ? u.signupIp.replace(/\.\d+$/, ".x") : null, spentUsd: spendByUser.find((s) => s.userId === u.id)?._sum.costUsd ?? 0 })),
     models: uncensored.map(({ extraCapabilities: _e, ...m }) => m),
+    imageModels,
   });
 });
 
@@ -47,6 +56,8 @@ const schema = z.object({
   historyMessages: z.number().int().min(1).max(40).optional(),
   maxInputChars: z.number().int().min(500).max(50000).optional(),
   models: z.array(z.string().max(200)).max(20).optional(),
+  images: z.number().int().min(0).max(50).optional(),
+  imageModels: z.array(z.string().max(200)).max(10).optional(),
   labels: z.record(z.string().max(200), z.object({ name: z.string().max(40), desc: z.string().max(160) })).optional(),
   listTitle: z.string().max(60).optional(),
   priceUsd: z.number().min(0).max(10000).optional(),

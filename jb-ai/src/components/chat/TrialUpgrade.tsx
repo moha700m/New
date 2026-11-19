@@ -11,14 +11,17 @@ export interface TrialInfo {
   creditLabel: string;
   telegramUrl: string;
   listTitle?: string;
+  imagesUsed?: number;
+  imagesLimit?: number;
+  imagesRemaining?: number;
 }
 
 const BENEFITS = [
   { icon: Code2, text: "أقوى نماذج البرمجة" },
   { icon: Brain, text: "نماذج التفكير العميق" },
-  { icon: ImageIcon, text: "توليد صور بدون قيود" },
+  { icon: ImageIcon, text: "صور بدون قيود +١٨ وبدون حد" },
   { icon: Bot, text: "وكيل يبني المواقع وينشرها لك" },
-  { icon: Flame, text: "كل النماذج بدون فلترة" },
+  { icon: Flame, text: "كل النماذج بدون قيود +١٨" },
 ];
 
 const safeUrl = (u: string) => (/^https:\/\//.test(u) ? u : "https://t.me/Justoio");
@@ -31,7 +34,7 @@ export function TrialUpgradeCard({ t, reason }: { t: TrialInfo; reason: "exhaust
         <Sparkles size={16} /> {reason === "cap" ? "التجربة المجانية وصلت حدّها اليوم" : "خلصت رسائلك المجانية"}
       </div>
       <h2 className="mt-2 text-[22px] font-bold leading-9 text-white">تبي تستفيد من أقوى النماذج؟</h2>
-      <p className="mt-1 text-[15px] leading-7 text-slate-300">برمجة، تفكير، صور، ووكيل يبني وينشر المواقع — كله بدون فلترة.</p>
+      <p className="mt-1 text-[15px] leading-7 text-slate-300">برمجة، تفكير، صور، ووكيل يبني وينشر المواقع — كله بدون قيود +١٨.</p>
       <ul className="mt-4 grid gap-2 sm:grid-cols-2">
         {BENEFITS.map((b) => (
           <li key={b.text} className="flex items-center gap-2.5 rounded-xl bg-ink-800/70 px-3 py-2.5 text-[14px] text-slate-100">
@@ -61,6 +64,14 @@ export function TrialUpgradeCard({ t, reason }: { t: TrialInfo; reason: "exhaust
   );
 }
 
+/** «باقي لك صورتين» / «صورة وحدة» / «خلصت صورك» */
+export function imagesLeftLabel(n: number) {
+  if (n <= 0) return "خلصت صورك المجانية";
+  if (n === 1) return "باقي لك صورة وحدة";
+  if (n === 2) return "باقي لك صورتين";
+  return `باقي لك ${n} صور`;
+}
+
 /** Small, subtle bar above the composer for trial accounts: remaining messages + a short upgrade line. */
 export function TrialBar({ t }: { t: TrialInfo }) {
   const low = t.remaining <= 2;
@@ -69,7 +80,12 @@ export function TrialBar({ t }: { t: TrialInfo }) {
       <span className={`shrink-0 rounded-full px-2 py-0.5 text-[12px] font-semibold ${low ? "bg-amber-500/15 text-amber-300" : "bg-ink-700 text-slate-200"}`}>
         باقي لك {t.remaining} من {t.limit} رسايل
       </span>
-      <span className="min-w-0 truncate text-slate-400">أقوى النماذج + وكيل + صور بـ ${t.priceUsd}</span>
+      {(t.imagesLimit ?? 0) > 0 && (
+        <span className="shrink-0 rounded-full bg-rose-500/10 px-2 py-0.5 text-[12px] font-semibold text-rose-200" data-testid="trial-images-left">
+          {imagesLeftLabel(t.imagesRemaining ?? 0)}
+        </span>
+      )}
+      <span className="hidden min-w-0 truncate text-slate-400 sm:inline">أقوى النماذج + وكيل + صور بـ ${t.priceUsd}</span>
       <a href={safeUrl(t.telegramUrl)} target="_blank" rel="noopener noreferrer" className="ms-auto shrink-0 font-semibold text-amber-300 hover:text-amber-200">
         اشترك
       </a>

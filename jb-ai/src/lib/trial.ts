@@ -20,6 +20,9 @@ export interface TrialSettings {
   historyMessages: number;
   maxInputChars: number;
   models: string[]; // provider modelIds (Venice)
+  /** free uncensored image generations per account (separate from the text messages) */
+  images: number;
+  imageModels: string[]; // provider modelIds (Venice image models, cheapest)
   /** friendly Saudi names shown to trial users instead of the real model names */
   labels: Record<string, { name: string; desc: string }>;
   listTitle: string;
@@ -38,11 +41,16 @@ export const DEFAULT_TRIAL: TrialSettings = {
   maxInputChars: 6000,
   // cheapest uncensored Venice text models (in / out $ per 1M tokens): 0.07/0.40, 0.1625/0.50, 0.165/0.55, 0.20/0.90
   models: ["olafangensan-glm-4.7-flash-heretic", "gemma-4-uncensored", "glm-5-3-flash-uncensored", "venice-uncensored-1-2"],
+  images: 2,
+  // cheapest Venice image models ($0.01 / image), generated with safe_mode:false
+  imageModels: ["lustify-v8", "z-image-turbo"],
   labels: {
     "olafangensan-glm-4.7-flash-heretic": { name: "السريع", desc: "يرد عليك بسرعة البرق وبدون لف ودوران" },
     "gemma-4-uncensored": { name: "الجريء", desc: "يقول اللي في خاطره بدون قيود ولا مجاملة" },
     "glm-5-3-flash-uncensored": { name: "الذكي", desc: "يفكّر زين ويفهمك من نص كلمة" },
     "venice-uncensored-1-2": { name: "الفلّة", desc: "يسولف معك على راحتك وما عنده خطوط حمرا" },
+    "lustify-v8": { name: "الرسّام الجريء", desc: "يرسم لك اللي في بالك بدون قيود +١٨" },
+    "z-image-turbo": { name: "الرسّام السريع", desc: "صورة بثواني، أي فكرة تخطر لك" },
   },
   listTitle: "نماذج بدون قيود +١٨",
   priceUsd: 20,
@@ -53,7 +61,7 @@ export const DEFAULT_TRIAL: TrialSettings = {
 export async function getTrialSettings(): Promise<TrialSettings> {
   const row = await prisma.setting.findUnique({ where: { key: "trial" } });
   const v = (row?.value as Partial<TrialSettings>) ?? {};
-  return { ...DEFAULT_TRIAL, ...v, labels: { ...DEFAULT_TRIAL.labels, ...(v.labels ?? {}) } };
+  return { ...DEFAULT_TRIAL, ...v, labels: { ...DEFAULT_TRIAL.labels, ...(v.labels ?? {}) }, imageModels: v.imageModels ?? DEFAULT_TRIAL.imageModels, images: v.images ?? DEFAULT_TRIAL.images };
 }
 
 export const trialLabel = (t: TrialSettings, modelId: string, fallback: string) => t.labels[modelId]?.name || fallback;
@@ -96,7 +104,7 @@ export function trialPlan(): Plan {
     maxUploadMb: 0,
     allowUploads: false,
     allowWebSearch: false,
-    allowImageGeneration: false,
+    allowImageGeneration: true, // only the trial image models (planAllowsModel), counted separately
     allowAllModels: false,
     isDefault: false,
     active: true,
@@ -116,6 +124,17 @@ export async function trialModelRows(s?: TrialSettings) {
   return t.models.map((id) => rows.find((r) => r.modelId === id)).filter(Boolean) as typeof rows;
 }
 
+/** Trial image model rows (enabled image models the admin allowed; empty when the image quota is 0). */
+export async function trialImageRows(s?: TrialSettings) {
+  const t = s ?? (await getTrialSettings());
+  if (t.images <= 0 || !t.imageModels.length) return [];
+  const rows = await prisma.aiModel.findMany({
+    where: { modelId: { in: t.imageModels }, enabled: true, supportsImageGeneration: true, provider: { enabled: true } },
+    select: { id: true, modelId: true, displayName: true },
+  });
+  return t.imageModels.map((id) => rows.find((r) => r.modelId === id)).filter(Boolean) as typeof rows;
+}
+
 export function trialRegistrationOpen(t: TrialSettings) {
   return t.enabled && (!t.requireVerification || mailerConfigured());
 }
@@ -129,17 +148,33 @@ export async function takeTrialMessage(userId: string, t: TrialSettings) {
   if (r.count === 0) throw new HttpError(429, "خلصت رسايلك المجانية.", "trial_exhausted");
 }
 
+/** Same as takeTrialMessage, for the separate free image quota. */
+export async function takeTrialImage(userId: string, t: TrialSettings) {
+  if (!t.enabled) throw new HttpError(403, "التجربة المجانية واقفة الحين، جرّب بعدين.", "trial_off");
+  const spend = await trialSpendToday();
+  if (spend.usd >= t.dailyCapUsd) throw new HttpError(429, "التجربة المجانية وصلت حدّها اليوم، ترجع بكرة إن شاء الله.", "trial_daily_cap");
+  const r = await prisma.user.updateMany({ where: { id: userId, trialImagesUsed: { lt: t.images } }, data: { trialImagesUsed: { increment: 1 } } });
+  if (r.count === 0) throw new HttpError(429, "خلصت صورك المجانية.", "trial_images_exhausted");
+}
+
+export async function refundTrialImage(userId: string) {
+  await prisma.user.updateMany({ where: { id: userId, trialImagesUsed: { gt: 0 } }, data: { trialImagesUsed: { decrement: 1 } } }).catch(() => {});
+}
+
 export async function refundTrialMessage(userId: string) {
   await prisma.user.updateMany({ where: { id: userId, trialUsed: { gt: 0 } }, data: { trialUsed: { decrement: 1 } } }).catch(() => {});
 }
 
 export async function trialStatus(userId: string) {
-  const [t, u, spend] = await Promise.all([getTrialSettings(), prisma.user.findUnique({ where: { id: userId }, select: { trialUsed: true } }), trialSpendToday()]);
+  const [t, u, spend] = await Promise.all([getTrialSettings(), prisma.user.findUnique({ where: { id: userId }, select: { trialUsed: true, trialImagesUsed: true } }), trialSpendToday()]);
   const used = u?.trialUsed ?? 0;
   return {
     used,
     limit: t.messages,
     remaining: Math.max(0, t.messages - used),
+    imagesUsed: u?.trialImagesUsed ?? 0,
+    imagesLimit: t.images,
+    imagesRemaining: Math.max(0, t.images - (u?.trialImagesUsed ?? 0)),
     capReached: spend.usd >= t.dailyCapUsd,
     enabled: t.enabled,
     priceUsd: t.priceUsd,

@@ -14,7 +14,7 @@ import { SpendMeter } from "./SpendMeter";
 import { type ModeKey, type ModeOption } from "./ModeMenu";
 import { useMentionCatalog, type MentionItem } from "./Mentions";
 import { Sidebar, type ConvItem, type MeInfo } from "./Sidebar";
-import { TrialBar, TrialUpgradeCard } from "./TrialUpgrade";
+import { imagesLeftLabel, TrialBar, TrialUpgradeCard } from "./TrialUpgrade";
 
 const MODEL_KEY = "jb.selectedModel";
 
@@ -318,6 +318,17 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
       if (!res.ok || !res.body) {
         const d = await res.json().catch(() => ({ error: `تعذّر الطلب (${res.status})` }));
         if (d.code === "model_unavailable") setSelectedModel(null);
+        if ((d.code === "trial_exhausted" || d.code === "trial_images_exhausted") && me?.trial) {
+          // one quota is used up but the other may still be left: say so in the bubble; the card shows once both are gone
+          const t = me.trial;
+          const otherLeft = d.code === "trial_exhausted" ? (t.imagesRemaining ?? 0) > 0 : t.remaining > 0;
+          if (otherLeft || d.code === "trial_images_exhausted") {
+            const hint = d.code === "trial_exhausted" ? ` بس ${imagesLeftLabel(t.imagesRemaining ?? 0)} — اختر رسّام من القائمة فوق.` : t.remaining > 0 ? " بس تقدر تكمل سوالف بالرسايل الباقية." : "";
+            patchMessage(ref.id, (m) => ({ ...m, status: "error", error: (d.error ?? "") + hint, live: null }));
+            void loadMe();
+            return;
+          }
+        }
         if (d.code === "trial_exhausted" || d.code === "trial_daily_cap") {
           // the upgrade card takes over: drop the unanswered turn
           setTrialBlock(d.code === "trial_daily_cap" ? "cap" : "exhausted");
@@ -479,7 +490,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
 
   // role picker: each role → the default model the admin set for it (Admin → الافتراضيات)
   const trial = me?.trial ?? null;
-  const trialOut: "exhausted" | "cap" | null = trial ? (trialBlock ?? (trial.remaining <= 0 ? "exhausted" : trial.capReached ? "cap" : null)) : null;
+  const trialOut: "exhausted" | "cap" | null = trial ? (trialBlock ?? (trial.remaining <= 0 && (trial.imagesRemaining ?? 0) <= 0 ? "exhausted" : trial.capReached ? "cap" : null)) : null;
   const modeOptions: ModeOption[] = trial ? [] : (["text", "reasoning", "code", "vision", "image"] as ModeKey[])
     .map((key) => {
       const id = key === "image" ? imageDefault : (config?.defaults[key] ?? null);

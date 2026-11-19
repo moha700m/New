@@ -53,7 +53,7 @@ export async function planAllowsModel(plan: Plan, modelRowId: string) {
   if (plan.allowAllModels) return true;
   if (plan.key === "trial") {
     const [t, m] = await Promise.all([getTrialSettings(), prisma.aiModel.findUnique({ where: { id: modelRowId }, select: { modelId: true, supportsImageGeneration: true } })]);
-    return Boolean(m && !m.supportsImageGeneration && t.models.includes(m.modelId));
+    return Boolean(m && (m.supportsImageGeneration ? t.images > 0 && t.imageModels.includes(m.modelId) : t.models.includes(m.modelId)));
   }
   const row = await prisma.planModel.findUnique({ where: { planId_modelId: { planId: plan.id, modelId: modelRowId } } });
   return Boolean(row);

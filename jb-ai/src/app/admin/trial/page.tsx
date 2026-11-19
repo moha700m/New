@@ -13,15 +13,18 @@ interface S {
   historyMessages: number;
   maxInputChars: number;
   models: string[];
+  images: number;
+  imageModels: string[];
   labels: Record<string, { name: string; desc: string }>;
   listTitle: string;
   priceUsd: number;
   creditLabel: string;
   telegramUrl: string;
 }
-interface U { id: string; email: string; name: string | null; access: string; trialUsed: number; emailVerifiedAt: string | null; disabled: boolean; createdAt: string; signupIp: string | null; spentUsd: number }
+interface U { id: string; email: string; name: string | null; access: string; trialUsed: number; trialImagesUsed: number; emailVerifiedAt: string | null; disabled: boolean; createdAt: string; signupIp: string | null; spentUsd: number }
 interface M { id: string; modelId: string; displayName: string; inputPricePerM: number | null; outputPricePerM: number | null }
-interface D { settings: S; mailerConfigured: boolean; today: { spendUsd: number; requests: number; capUsd: number }; users: U[]; models: M[] }
+interface IM { id: string; modelId: string; displayName: string; pricePerImageUsd: number | null }
+interface D { settings: S; mailerConfigured: boolean; today: { spendUsd: number; requests: number; capUsd: number }; users: U[]; models: M[]; imageModels: IM[] }
 
 const usd = (n: number) => `$${n.toFixed(n < 1 ? 4 : 2)}`;
 
@@ -40,7 +43,7 @@ export default function TrialAdminPage() {
     <>
       <PageHeader
         title="التجربة المجانية"
-        subtitle="تسجيل عام للتجربة فقط — الموقع يبقى خاص لك. نماذج رخيصة بدون فلترة، عدد رسائل محدود، وسقف صرف يومي."
+        subtitle="تسجيل عام للتجربة فقط — الموقع يبقى خاص لك. نماذج رخيصة بدون قيود +١٨، رسائل وصور محدودة، وسقف صرف يومي."
         actions={<button className="btn-primary" disabled={busy === "s"} onClick={() => run("s", () => api("/api/admin/trial", { method: "PUT", body: s }), "تم الحفظ").then(() => reload())} data-testid="trial-save">حفظ</button>}
       />
       <div className="grid gap-4 lg:grid-cols-3">
@@ -65,6 +68,7 @@ export default function TrialAdminPage() {
           <div className="grid gap-3 sm:grid-cols-3">
             <Field label="رسائل لكل حساب"><input className="input" type="number" value={s.messages} onChange={(e) => setS({ ...s, messages: Number(e.target.value) })} /></Field>
             <Field label="سقف الصرف اليومي ($)"><input className="input" type="number" step="0.1" value={s.dailyCapUsd} onChange={(e) => setS({ ...s, dailyCapUsd: Number(e.target.value) })} /></Field>
+            <Field label="صور مجانية لكل حساب"><input className="input" type="number" value={s.images} onChange={(e) => setS({ ...s, images: Number(e.target.value) })} data-testid="trial-images-input" /></Field>
             <Field label="أقصى توكنز للرد"><input className="input" type="number" value={s.maxOutputTokens} onChange={(e) => setS({ ...s, maxOutputTokens: Number(e.target.value) })} /></Field>
           </div>
           <h3 className="pt-2 font-semibold">إعلان الاشتراك</h3>
@@ -78,7 +82,7 @@ export default function TrialAdminPage() {
       </div>
 
       <div className="card mt-4 space-y-2">
-        <h2 className="font-semibold">نماذج التجربة (Venice بدون فلترة — الأرخص أول)</h2>
+        <h2 className="font-semibold">نماذج التجربة (Venice بدون قيود +١٨ — الأرخص أول)</h2>
         <p className="text-xs text-slate-500">الأسماء والوصف هي اللي يشوفها الضيف — الاسم الحقيقي يبقى مخفي.</p>
         <div className="divide-y divide-ink-700">
           {data.models.map((m) => {
@@ -94,6 +98,32 @@ export default function TrialAdminPage() {
                 {on && (
                   <>
                     <input className="input w-32" placeholder="الاسم بالسعودي" value={l.name} onChange={(e) => setS({ ...s, labels: { ...s.labels, [m.modelId]: { ...l, name: e.target.value } } })} />
+                    <input className="input min-w-[200px] flex-1" placeholder="وصف قصير" value={l.desc} onChange={(e) => setS({ ...s, labels: { ...s.labels, [m.modelId]: { ...l, desc: e.target.value } } })} />
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="card mt-4 space-y-2" data-testid="trial-image-models">
+        <h2 className="font-semibold">نماذج الصور المجانية (safe_mode مقفل — بدون قيود +١٨)</h2>
+        <p className="text-xs text-slate-500">كل حساب له {s.images} صور مجانية منفصلة عن الرسائل، وتكلفتها تنحسب من سقف اليوم.</p>
+        <div className="divide-y divide-ink-700">
+          {data.imageModels.map((m) => {
+            const on = s.imageModels.includes(m.modelId);
+            const l = s.labels[m.modelId] ?? { name: "", desc: "" };
+            return (
+              <div key={m.id} className="flex flex-wrap items-center gap-3 py-2">
+                <Toggle checked={on} onChange={(v) => setS({ ...s, imageModels: v ? [...s.imageModels, m.modelId] : s.imageModels.filter((x) => x !== m.modelId) })} />
+                <div className="min-w-[180px] flex-1">
+                  <div className="text-sm font-medium">{m.displayName}</div>
+                  <div className="text-xs text-slate-500" dir="ltr">${m.pricePerImageUsd} / image</div>
+                </div>
+                {on && (
+                  <>
+                    <input className="input w-36" placeholder="الاسم بالسعودي" value={l.name} onChange={(e) => setS({ ...s, labels: { ...s.labels, [m.modelId]: { ...l, name: e.target.value } } })} />
                     <input className="input min-w-[200px] flex-1" placeholder="وصف قصير" value={l.desc} onChange={(e) => setS({ ...s, labels: { ...s.labels, [m.modelId]: { ...l, desc: e.target.value } } })} />
                   </>
                 )}
@@ -119,12 +149,13 @@ export default function TrialAdminPage() {
 
       <div className="mt-4 space-y-2" data-testid="trial-users">
         <h2 className="font-semibold">حسابات التجربة ({trialUsers.length}) · المشتركين ({fullUsers.length})</h2>
-        <Table head={["الإيميل", "النوع", "الرسائل", "الصرف", "مؤكّد", "التسجيل", "إجراءات"]} empty={!data.users.length}>
+        <Table head={["الإيميل", "النوع", "الرسائل", "الصور", "الصرف", "مؤكّد", "التسجيل", "إجراءات"]} empty={!data.users.length}>
           {data.users.map((u) => (
             <tr key={u.id} className={u.disabled ? "opacity-50" : ""}>
               <td className="px-3 py-2"><bdi dir="ltr">{u.email}</bdi></td>
               <td className="px-3 py-2">{u.access === "full" ? <span className="badge bg-amber-500/15 text-amber-300">مشترك</span> : <span className="badge bg-ink-700 text-slate-300">تجربة</span>}</td>
               <td className="px-3 py-2">{u.access === "full" ? "∞" : `${u.trialUsed} / ${s.messages}`}</td>
+              <td className="px-3 py-2">{u.access === "full" ? "∞" : `${u.trialImagesUsed} / ${s.images}`}</td>
               <td className="px-3 py-2" dir="ltr">{usd(u.spentUsd)}</td>
               <td className="px-3 py-2">{u.emailVerifiedAt ? "✓" : "—"}</td>
               <td className="px-3 py-2 text-xs text-slate-400">{new Date(u.createdAt).toLocaleDateString("ar-SA-u-nu-latn", { timeZone: "Asia/Riyadh" })}</td>
