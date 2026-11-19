@@ -19,6 +19,7 @@ interface S {
   listTitle: string;
   priceUsd: number;
   creditLabel: string;
+  systemPrompt: string;
   telegramUrl: string;
 }
 interface U { id: string; email: string; name: string | null; access: string; trialUsed: number; trialImagesUsed: number; emailVerifiedAt: string | null; disabled: boolean; createdAt: string; signupIp: string | null; spentUsd: number }
@@ -80,6 +81,7 @@ export default function TrialAdminPage() {
           <div className="grid gap-3 sm:grid-cols-3">
             <Field label="سعر الاشتراك ($)"><input className="input" type="number" value={s.priceUsd} onChange={(e) => setS({ ...s, priceUsd: Number(e.target.value) })} data-testid="trial-price-input" /></Field>
             <Field label="الرصيد (يظهر في الإعلان)"><input className="input" value={s.creditLabel} onChange={(e) => setS({ ...s, creditLabel: e.target.value })} /></Field>
+            <Field label="تعليمات النموذج للتجربة (اللهجة)"><textarea className="input min-h-[90px]" value={s.systemPrompt ?? ""} onChange={(e) => setS({ ...s, systemPrompt: e.target.value })} /></Field>
             <Field label="رابط تلقرام"><input dir="ltr" className="input" value={s.telegramUrl} onChange={(e) => setS({ ...s, telegramUrl: e.target.value })} /></Field>
           </div>
           <Field label="عنوان قائمة النماذج"><input className="input" value={s.listTitle} onChange={(e) => setS({ ...s, listTitle: e.target.value })} /></Field>

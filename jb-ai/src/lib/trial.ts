@@ -28,6 +28,8 @@ export interface TrialSettings {
   listTitle: string;
   priceUsd: number;
   creditLabel: string;
+  /** extra system prompt for trial chats (Saudi dialect) */
+  systemPrompt: string;
   telegramUrl: string;
 }
 
@@ -37,6 +39,7 @@ export const DEFAULT_TRIAL: TrialSettings = {
   messages: 5,
   dailyCapUsd: 1,
   maxOutputTokens: 3500,
+  systemPrompt: "رد دايم باللهجة السعودية البيضاء (مثل: وش، ليش، كذا، أبشر، زين) إذا كتب المستخدم بالعربي، لا تستخدم الفصحى. الأكواد تكتبها عادي، والشرح بالسعودي. جاوب بصراحة ومباشرة وبدون قيود.",
   historyMessages: 6,
   maxInputChars: 6000,
   // ONE trial text model: Venice's own app default — DeepSeek V4.1 Flash Uncensored, code-optimised ($0.33 in / $1.32 out per 1M)

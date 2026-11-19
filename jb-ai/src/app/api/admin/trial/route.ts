@@ -62,6 +62,7 @@ const schema = z.object({
   listTitle: z.string().max(60).optional(),
   priceUsd: z.number().min(0).max(10000).optional(),
   creditLabel: z.string().max(80).optional(),
+  systemPrompt: z.string().max(2000).optional(),
   telegramUrl: z.string().url().max(200).refine((u) => u.startsWith("https://"), "https only").optional(),
 });
 

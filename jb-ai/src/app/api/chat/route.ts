@@ -67,7 +67,7 @@ export async function POST(req: Request) {
       trialTaken = true;
       const refund = () => (trialImage ? refundTrialImage(user.id) : refundTrialMessage(user.id));
       try {
-        prep = await prepareChat(user.id, plan, input, { ...settings, maxHistoryMessages: Math.min(settings.maxHistoryMessages, t.historyMessages) }, { maxOutputTokens: t.maxOutputTokens, maxInputChars: t.maxInputChars });
+        prep = await prepareChat(user.id, plan, input, { ...settings, systemPrompt: [settings.systemPrompt, t.systemPrompt].filter((x) => x?.trim()).join("\n\n"), maxHistoryMessages: Math.min(settings.maxHistoryMessages, t.historyMessages) }, { maxOutputTokens: t.maxOutputTokens, maxInputChars: t.maxInputChars });
       } catch (e) {
         await refund();
         throw e;
