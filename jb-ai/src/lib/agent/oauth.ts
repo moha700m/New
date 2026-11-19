@@ -31,6 +31,12 @@ export function publicOrigin(req: Request) {
 }
 
 export const MCP_OAUTH_CALLBACK = "/api/oauth/mcp/callback";
+/**
+ * Some providers (e.g. appdeploy.ai) only accept redirect URIs of the big AI clients plus loopback
+ * (RFC 8252 native-app style). For those we register a loopback redirect: after sign-in the browser lands on
+ * a localhost address that doesn't open, and the owner pastes that address back into the site (paste-back step).
+ */
+export const LOOPBACK_REDIRECT = "http://localhost:8976/jb-ai/oauth/callback";
 
 async function getJson(url: string, timeoutMs = 10_000): Promise<any | null> {
   try {
@@ -134,16 +140,26 @@ function pkce() {
 }
 
 /** Starts the authorization-code + PKCE flow. Returns the URL to send the browser to. */
-export async function startMcpOAuth(server: McpServer, origin: string, probe: Extract<ProbeResult, { needsAuth: true }>, back = "/"): Promise<string> {
-  const redirectUri = `${origin}${MCP_OAUTH_CALLBACK}`;
+export async function startMcpOAuth(server: McpServer, origin: string, probe: Extract<ProbeResult, { needsAuth: true }>, back = "/"): Promise<{ url: string; state: string; pasteBack: boolean }> {
+  const webRedirect = `${origin}${MCP_OAUTH_CALLBACK}`;
   const prev = (server.oauthConfig ?? null) as OAuthConfig | null;
   let cfg = await discoverOAuth(server.url, probe);
   let secret: string | undefined;
-  if (prev?.client_id && prev.redirect_uri === redirectUri && prev.issuer === cfg.issuer) {
+  let redirectUri = webRedirect;
+  if (prev?.client_id && (prev.redirect_uri === webRedirect || prev.redirect_uri === LOOPBACK_REDIRECT) && prev.issuer === cfg.issuer) {
+    redirectUri = prev.redirect_uri;
     cfg = { ...cfg, client_id: prev.client_id, token_endpoint_auth_method: prev.token_endpoint_auth_method, redirect_uri: redirectUri };
     secret = server.oauthClientSecretEncrypted ? decryptSecret(server.oauthClientSecretEncrypted) : undefined;
   } else {
-    const reg = await registerClient(cfg, redirectUri, "JB AI Agent");
+    let reg;
+    try {
+      reg = await registerClient(cfg, webRedirect, "JB AI Agent");
+    } catch (e) {
+      // provider allow-lists redirect URIs → fall back to a loopback redirect + paste-back
+      if (!/invalid_redirect_uri|redirect_uri/i.test((e as Error).message)) throw e;
+      redirectUri = LOOPBACK_REDIRECT;
+      reg = await registerClient(cfg, redirectUri, "JB AI Agent");
+    }
     cfg = { ...cfg, client_id: reg.client_id, token_endpoint_auth_method: reg.token_endpoint_auth_method, redirect_uri: redirectUri };
     secret = reg.client_secret;
   }
@@ -164,7 +180,19 @@ export async function startMcpOAuth(server: McpServer, origin: string, probe: Ex
   a.searchParams.set("state", state);
   a.searchParams.set("resource", cfg.resource);
   if (cfg.scope) a.searchParams.set("scope", cfg.scope);
-  return a.toString();
+  return { url: a.toString(), state, pasteBack: redirectUri === LOOPBACK_REDIRECT };
+}
+
+/** Paste-back step: the owner pasted the (unopenable) localhost address that holds ?code=…&state=… */
+export function parsePastedCallback(raw: string) {
+  const t = raw.trim();
+  let q: URLSearchParams;
+  try {
+    q = new URL(t).searchParams;
+  } catch {
+    q = new URLSearchParams(t.includes("?") ? t.slice(t.indexOf("?") + 1) : t);
+  }
+  return { code: q.get("code"), state: q.get("state"), error: q.get("error"), errorDescription: q.get("error_description") };
 }
 
 async function tokenRequest(cfg: OAuthConfig, secretEnc: string | null, params: Record<string, string>) {

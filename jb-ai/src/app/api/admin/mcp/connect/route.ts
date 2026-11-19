@@ -23,6 +23,10 @@ export const POST = adminRoute(async ({ req, log }) => {
       return json({ connected: true, server: redactMcp(r.server) });
     }
     await log("mcp.oauth_start", { entityType: "mcp", entityId: server.id, details: { name: server.name, issuer: new URL(r.authorizeUrl).origin } });
+    if (r.pasteBack) {
+      const q = new URLSearchParams({ name: server.name, back: safeBack(body.back), go: r.authorizeUrl });
+      return json({ connected: false, authorizeUrl: `/connect/paste?${q}` });
+    }
     return json({ connected: false, authorizeUrl: r.authorizeUrl });
   } catch (e) {
     await connectLog(req, { kind: "mcp", step: "error", target: server?.slug ?? body.preset, ok: false, message: (e as Error).message });

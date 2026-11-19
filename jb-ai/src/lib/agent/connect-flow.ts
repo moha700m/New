@@ -73,8 +73,8 @@ export async function beginConnect(server: McpServer, origin: string, back = "/"
     }
   }
   try {
-    const authorizeUrl = await startMcpOAuth(server, origin, probe, back);
-    return { connected: false as const, server, authorizeUrl };
+    const r = await startMcpOAuth(server, origin, probe, back);
+    return { connected: false as const, server, authorizeUrl: r.url, state: r.state, pasteBack: r.pasteBack };
   } catch (e) {
     const msg = (e as Error).message.slice(0, 400);
     await prisma.mcpServer.update({ where: { id: server.id }, data: { lastError: msg } });

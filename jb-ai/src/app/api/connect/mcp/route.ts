@@ -31,6 +31,11 @@ export async function GET(req: Request) {
     }
     await connectLog(req, { kind: "mcp", step: "start", target: server.slug, message: new URL(r.authorizeUrl).origin });
     await audit({ id: user.id, email: user.email }, "mcp.oauth_start", { entityType: "mcp", entityId: server.id, details: { name: server.name, issuer: new URL(r.authorizeUrl).origin } });
+    if (r.pasteBack) {
+      // provider doesn't allow our web callback: guided sign-in + paste-back page
+      const q = new URLSearchParams({ name: server.name, back, go: r.authorizeUrl });
+      return NextResponse.redirect(`${origin}/connect/paste?${q}`, 303);
+    }
     return NextResponse.redirect(r.authorizeUrl, 303);
   } catch (e) {
     await connectLog(req, { kind: "mcp", step: "error", target: name, ok: false, message: (e as Error).message });
