@@ -29,6 +29,7 @@ export default function TrialAdminPage() {
   const { data, reload } = useAdmin<D>("/api/admin/trial");
   const { run, busy } = useAction();
   const [s, setS] = useState<S | null>(null);
+  const [nu, setNu] = useState({ email: "", password: "", access: "trial" });
   useEffect(() => setS(data?.settings ?? null), [data]);
   if (!data || !s) return <p className="text-slate-400">جارٍ التحميل…</p>;
   const pct = Math.min(100, (data.today.spendUsd / Math.max(data.today.capUsd, 0.0001)) * 100);
@@ -99,6 +100,20 @@ export default function TrialAdminPage() {
               </div>
             );
           })}
+        </div>
+      </div>
+
+      <div className="card mt-4 space-y-3">
+        <h2 className="font-semibold">إضافة حساب يدوي</h2>
+        <p className="text-xs text-slate-500">ينشأ مؤكّد على طول (ما يحتاج إيميل تأكيد) — مفيد لين ما تجهّز SMTP، أو لمشترك دفع لك.</p>
+        <div className="flex flex-wrap items-end gap-2">
+          <input dir="ltr" className="input w-64" placeholder="email@example.com" value={nu.email} onChange={(e) => setNu({ ...nu, email: e.target.value })} />
+          <input dir="ltr" className="input w-48" type="password" autoComplete="new-password" placeholder="كلمة سر (٨+)" value={nu.password} onChange={(e) => setNu({ ...nu, password: e.target.value })} />
+          <select className="input w-40" value={nu.access} onChange={(e) => setNu({ ...nu, access: e.target.value })}>
+            <option value="trial">تجربة</option>
+            <option value="full">اشتراك كامل</option>
+          </select>
+          <button className="btn-primary" disabled={busy === "new" || !nu.email || nu.password.length < 8} onClick={() => run("new", () => api("/api/admin/trial/users", { body: nu }), "تم إنشاء الحساب").then((r) => { if (r) { setNu({ email: "", password: "", access: "trial" }); void reload(); } })}>إضافة</button>
         </div>
       </div>
 
