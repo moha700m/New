@@ -1,6 +1,5 @@
 "use client";
 import { Check, ChevronDown, Flame, Gift, Lock, Search, Sparkles } from "lucide-react";
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { LiveModel } from "../useLiveConfig";
 import { CapabilityIcons, isFreeModel, isRegularModel, isUncensoredModel } from "./ModelSelector";
@@ -131,9 +130,9 @@ export function ModelPicker({ models, value, onChange, defaultId, signedIn, titl
                           {m.description && <div dir="auto" className="line-clamp-1 text-xs text-slate-500">{m.description}</div>}
                         </div>
                         {locked ? (
-                          <Link href="/plans" className="badge mt-0.5 bg-amber-400/15 text-amber-300" onClick={(e) => e.stopPropagation()}>
-                            <Lock size={10} /> ترقية
-                          </Link>
+                          <a href="https://t.me/Justoio" target="_blank" rel="noopener noreferrer" className="badge mt-0.5 bg-amber-400/15 text-amber-300" onClick={(e) => e.stopPropagation()}>
+                            <Lock size={10} /> اشترك
+                          </a>
                         ) : m.id === current?.id ? (
                           <Check size={16} className="mt-0.5 text-brand-400" />
                         ) : null}

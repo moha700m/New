@@ -121,7 +121,7 @@ function SettingsInner() {
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
-                <Link href="/plans" className="btn-primary">{me.plan.key === "free" ? "ترقية" : "تغيير الباقة"}</Link>
+                <a href="https://t.me/Justoio" target="_blank" rel="noopener noreferrer" className="btn-primary">اشترك الحين</a>
                 {sub && sub.status === "ACTIVE" && (
                   <>
                     <button className="btn-outline" onClick={() => api<{ url: string }>("/api/billing/portal", { method: "POST" }).then((d) => (window.location.href = d.url)).catch((e) => toast(e.message, "err"))}>

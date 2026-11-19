@@ -236,7 +236,7 @@ export function Composer(props: {
               {props.setAgent && <MenuItem icon={Bot} label="وضع الوكيل" hint="يبني وينشر بالأدوات" active={props.agent} onClick={() => { setMenu(false); props.setAgent!(!props.agent); }} testid="agent-mode" />}
               {props.thinkAvailable && <MenuItem icon={Lightbulb} label="تفكير أعمق" active={props.think} onClick={() => { setMenu(false); props.setThink(!props.think); }} />}
               {props.searchAvailable && (
-                <MenuItem icon={Globe} label="بحث في الويب" active={props.search} onClick={() => { setMenu(false); if (props.searchLocked) toast("البحث في الويب متاح في الباقات المدفوعة.", "info"); else props.setSearch(!props.search); }} />
+                <MenuItem icon={Globe} label="بحث في الويب" active={props.search} onClick={() => { setMenu(false); if (props.searchLocked) toast("البحث في الويب للمشتركين بس.", "info"); else props.setSearch(!props.search); }} />
               )}
               {props.onOpenConnectors && (
                 <>

@@ -618,7 +618,6 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
           {isAdmin && <SpendMeter refreshKey={spendKey} />}
           {!signedIn && me && (
             <div className="flex items-center gap-2">
-              <Link href="/plans" className="hidden text-sm text-brand-400 hover:text-brand-400/80 sm:block">الباقات</Link>
               <Link href="/login" className="btn-outline hidden px-3 py-1.5 sm:inline-flex">تسجيل الدخول</Link>
               <Link href="/register" className="btn-primary px-3 py-1.5">سجّل مجانًا</Link>
             </div>

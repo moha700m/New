@@ -109,9 +109,6 @@ export function Sidebar(props: {
               </button>
             )
           )}
-          <Link href="/plans" className="btn-ghost w-full justify-start px-2.5 text-emerald-300 hover:text-emerald-200">
-            <CreditCard size={16} /> الباقات والأسعار
-          </Link>
         </nav>
         {user && props.conversations.length > 0 && (
           <div className="flex items-center justify-between px-5 pt-1 text-xs text-slate-500">
@@ -190,8 +187,7 @@ export function Sidebar(props: {
                 <span className="min-w-0 flex-1">
                   <span dir="auto" className="block truncate text-right text-sm font-medium">{user.name || user.email}</span>
                   <span className="block text-xs text-slate-500">
-                    باقة {props.me?.plan?.name}
-                    {props.me?.plan?.dailyMessageLimit != null && ` · اليوم ${props.me.usage?.messagesToday ?? 0} من ${props.me.plan.dailyMessageLimit}`}
+                    {props.me?.plan?.dailyMessageLimit != null ? `اليوم ${props.me.usage?.messagesToday ?? 0} من ${props.me.plan.dailyMessageLimit}` : "حسابي"}
                   </span>
                 </span>
               </button>
