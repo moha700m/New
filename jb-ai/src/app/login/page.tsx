@@ -47,18 +47,28 @@ function LoginForm() {
 
 export default function LoginPage() {
   const [registrationOpen, setRegistrationOpen] = useState(false);
+  const [trialOpen, setTrialOpen] = useState(false);
   useEffect(() => {
     fetch("/api/config", { cache: "no-store" })
       .then((r) => r.json())
-      .then((c) => setRegistrationOpen(Boolean(c?.site?.registrationOpen || c?.trialEnabled)))
+      .then((c) => {
+        setRegistrationOpen(Boolean(c?.site?.registrationOpen || c?.trialEnabled));
+        setTrialOpen(Boolean(c?.trialSignupOpen));
+      })
       .catch(() => {});
   }, []);
   return (
     <AuthShell
       title="أهلًا بعودتك"
       subtitle={registrationOpen ? "سجّل دخولك لمتابعة محادثاتك." : "الموقع خاص — سجّل دخولك للمتابعة."}
-      footer={registrationOpen ? <>ليس لديك حساب؟ <Link href="/register" className="font-semibold text-brand-400" data-testid="trial-register-link">جرّب مجانًا</Link></> : undefined}
+      footer={registrationOpen ? <>ليس لديك حساب؟ <Link href="/register" className="font-semibold text-brand-400" data-testid="trial-register-link">سجّل وجرّب مجانًا</Link></> : undefined}
     >
+      {trialOpen && (
+        <Link href="/register" className="mb-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-amber-400 py-3.5 text-[16px] font-bold text-ink-950 transition hover:bg-amber-300" data-testid="trial-cta">
+          سجّل وجرّب مجانًا ←
+        </Link>
+      )}
+      {trialOpen && <div className="mb-4 text-center text-xs text-slate-500">عندك حساب؟ سجّل دخولك تحت</div>}
       <Suspense>
         <LoginForm />
       </Suspense>
