@@ -37,7 +37,14 @@ export const GET = adminRoute(async () => {
   const spendByUser = ids.length
     ? await prisma.usageRecord.groupBy({ by: ["userId"], where: { userId: { in: ids } }, _sum: { costUsd: true } })
     : [];
+  const recent = await prisma.usageRecord.findMany({
+    where: { user: { access: { in: ["trial", "full"] } } },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+    select: { createdAt: true, modelKey: true, kind: true, status: true, costUsd: true, promptTokens: true, completionTokens: true, user: { select: { email: true } } },
+  });
   return json({
+    recent: recent.map(({ user, ...r }) => ({ ...r, email: user.email })),
     settings,
     mailerConfigured: mailerConfigured(),
     today: { spendUsd: spend.usd, requests: spend.requests, capUsd: settings.dailyCapUsd },
