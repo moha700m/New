@@ -64,7 +64,7 @@ export default function RegisterPage() {
     );
   return (
     <AuthShell
-      title={owner ? "إنشاء حساب المالك" : trial ? "جرّب «محمد | التقني» مجانًا" : "أنشئ حسابك"}
+      title={owner ? "إنشاء حساب المالك" : trial ? "جرّب AI بدون قيود مجانًا" : "أنشئ حسابك"}
       subtitle={owner ? "الموقع خاص. التسجيل متاح لبريد المالك فقط، ويُقفل تلقائيًا بعد إنشاء الحساب." : trial ? `عندك ${trialOffer(counts)} مجانية بنماذج بدون قيود +١٨. سجّل بإيميلك الحقيقي وأكّده، وكل شخص له حساب واحد بس.` : "مجاني دائمًا، ويمكنك الترقية في أي وقت."}
       footer={trial ? <>عندك حساب؟ <Link href="/login" className="text-brand-400">سجّل دخولك</Link></> : <>لديك حساب؟ <Link href="/login" className="text-brand-400">تسجيل الدخول</Link></>}
     >
