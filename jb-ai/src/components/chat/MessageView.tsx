@@ -64,7 +64,7 @@ function Attachments({ list }: { list: UiAttachment[] }) {
   );
 }
 
-export function MessageView({ m, isLast, canAct, onRegenerate, onEdit }: { m: UiMessage; isLast: boolean; canAct: boolean; onRegenerate: () => void; onEdit: (content: string) => void }) {
+export function MessageView({ m, isLast, canAct, onRegenerate, onEdit, showCost = true }: { m: UiMessage; isLast: boolean; canAct: boolean; onRegenerate: () => void; onEdit: (content: string) => void; showCost?: boolean }) {
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(m.content);
@@ -178,7 +178,7 @@ export function MessageView({ m, isLast, canAct, onRegenerate, onEdit }: { m: Ui
             </button>
           )}
           {m.modelName && <span className="ms-1 text-xs"><bdi>{m.modelName}</bdi></span>}
-          {m.costUsd != null && m.costUsd > 0 && (
+          {showCost && m.costUsd != null && m.costUsd > 0 && (
             <span dir="ltr" className="text-xs tabular-nums text-slate-600" title="تكلفة هذا الرد التقريبية">
               · ${m.costUsd < 0.001 ? m.costUsd.toFixed(5) : m.costUsd.toFixed(4)}
             </span>

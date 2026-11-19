@@ -661,6 +661,7 @@ export function ChatApp({ initialConversationId }: { initialConversationId?: str
                   <MessageView
                     key={m.id}
                     m={m}
+                    showCost={!isTrial}
                     isLast={i === lastAssistantIdx && i === messages.length - 1}
                     canAct={!streaming && !m.id.startsWith("pending")}
                     onRegenerate={regenerate}
