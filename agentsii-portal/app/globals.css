@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-arabic), ui-sans-serif, system-ui, "Segoe UI", Tahoma, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-ink-950: #05050a;
+  --color-ink-900: #0a0a14;
+  --color-ink-850: #0f0f1c;
+  --color-ink-800: #141426;
+  --color-ink-700: #1d1d35;
+  --color-ink-600: #2a2a4a;
+
+  --color-brand-violet: #8b5cf6;
+  --color-brand-indigo: #6366f1;
+  --color-brand-blue: #3b82f6;
+  --color-brand-cyan: #22d3ee;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: var(--color-ink-950);
+  color: #e7e7f3;
+}
+
+body {
+  min-height: 100dvh;
+  background-image:
+    radial-gradient(60rem 40rem at 85% -10%, rgb(139 92 246 / 0.18), transparent 60%),
+    radial-gradient(50rem 35rem at 0% 10%, rgb(59 130 246 / 0.14), transparent 60%);
+  background-attachment: fixed;
+}
+
+/* Numbers, IDs and amounts stay left-to-right inside RTL text. */
+.ltr-nums {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+
+.grid-bg {
+  background-image:
+    linear-gradient(rgb(255 255 255 / 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.035) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
+}
+
+@utility card {
+  @apply rounded-2xl border border-white/8 bg-ink-900/70 shadow-[0_20px_60px_-20px_rgb(0_0_0/0.6)] backdrop-blur-xl;
+}
+@utility input {
+  @apply w-full rounded-xl border border-white/10 bg-ink-850 px-4 py-3 text-[15px] text-white placeholder:text-white/30 outline-none transition focus:border-brand-violet/70 focus:ring-4 focus:ring-brand-violet/15 disabled:opacity-50;
+}
+@utility label {
+  @apply mb-1.5 block text-sm font-medium text-white/70;
+}
+@utility btn {
+  @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-4 disabled:cursor-not-allowed disabled:opacity-60;
+}
+@utility btn-primary {
+  @apply btn bg-gradient-to-l from-brand-violet to-brand-blue text-white shadow-lg shadow-brand-violet/25 hover:brightness-110 focus-visible:ring-brand-violet/30;
+}
+@utility btn-ghost {
+  @apply btn border border-white/10 bg-white/[0.03] text-white/80 hover:bg-white/[0.07] hover:text-white focus-visible:ring-white/10;
+}
+@utility btn-danger {
+  @apply btn border border-rose-500/30 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 focus-visible:ring-rose-500/20;
+}
+@utility gradient-text {
+  @apply bg-gradient-to-l from-brand-violet via-brand-indigo to-brand-blue bg-clip-text text-transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
