@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agentsii Codex Manager — تحميل</title>
+<meta name="description" content="Agentsii Codex Manager: connect DeepSeek, OpenRouter, Venice AI, Shannon AI or any OpenAI-compatible provider to OpenAI Codex on Windows.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237C6CFF'/%3E%3Cstop offset='1' stop-color='%2322D3EE'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='3' y='3' width='58' height='58' rx='14' fill='url(%23g)'/%3E%3Cpath d='M16 50 L32 14 L48 50' stroke='white' stroke-width='5.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cline x1='23' y1='38' x2='41' y2='38' stroke='white' stroke-width='4.4' stroke-linecap='round'/%3E%3Ccircle cx='32' cy='38' r='5' fill='%230B0D12' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
+<style>
+  :root { --bg:#0B0D12; --s1:#12151C; --s2:#181C25; --b:#262B36; --t:#E8EAF0; --m:#8B93A7; --a:#7C6CFF; --a2:#22D3EE; --ok:#22C55E; --warn:#F59E0B; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--t); font-family: "Segoe UI", "Noto Sans Arabic", system-ui, -apple-system, sans-serif; line-height:1.65; }
+  a { color: var(--a2); }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 24px 22px 64px; }
+  header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .brand { display:flex; align-items:center; gap:12px; font-weight:700; font-size:20px; }
+  .brand small { display:block; color:var(--m); font-weight:500; font-size:12px; }
+  .lang { background:transparent; color:var(--a2); border:1px solid var(--b); border-radius:8px; padding:6px 12px; cursor:pointer; font:inherit; }
+  .hero { margin-top:48px; display:grid; grid-template-columns: 1.15fr .85fr; gap:36px; align-items:center; }
+  h1 { font-size: clamp(30px, 4.4vw, 46px); line-height:1.15; margin:0 0 14px; letter-spacing:-.01em; }
+  .grad { background: linear-gradient(90deg, var(--a), var(--a2)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .lead { color:var(--m); font-size:17px; margin:0 0 26px; }
+  .card { background:var(--s1); border:1px solid var(--b); border-radius:16px; padding:22px; }
+  .dl { display:flex; flex-direction:column; gap:12px; }
+  .btn { display:flex; align-items:center; justify-content:space-between; gap:12px; text-decoration:none; color:var(--t); background:var(--s2); border:1px solid var(--b); border-radius:12px; padding:14px 16px; font-weight:600; }
+  .btn:hover { border-color: var(--a); }
+  .btn.primary { background: var(--a); border-color: var(--a); color:#fff; }
+  .btn small { font-weight:500; opacity:.8; }
+  .meta { color:var(--m); font-size:13px; }
+  .pill { display:inline-block; padding:3px 10px; border-radius:999px; font-size:12px; font-weight:600; border:1px solid; }
+  .pill.ok { color:var(--ok); border-color:#22c55e66; background:#22c55e1a; }
+  .pill.wait { color:var(--warn); border-color:#f59e0b66; background:#f59e0b1a; }
+  .grid { display:grid; grid-template-columns: repeat(3, 1fr); gap:16px; margin-top:56px; }
+  .grid h3 { margin:0 0 6px; font-size:16px; }
+  .grid p { margin:0; color:var(--m); font-size:14px; }
+  h2 { margin:56px 0 16px; font-size:22px; }
+  ol { padding-inline-start: 20px; color: var(--m); } ol li { margin: 6px 0; } ol b { color: var(--t); }
+  code { background:var(--s2); border:1px solid var(--b); border-radius:6px; padding:1px 6px; font-size:12.5px; direction:ltr; unicode-bidi:embed; }
+  .sums { font-family: ui-monospace, Consolas, monospace; font-size:11.5px; color:var(--m); word-break:break-all; direction:ltr; text-align:left; white-space:pre-wrap; margin:10px 0 0; }
+  footer { margin-top:60px; color:var(--m); font-size:13px; border-top:1px solid var(--b); padding-top:18px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+  [data-lang="en"] .ar, [data-lang="ar"] .en { display:none; }
+  @media (max-width: 820px) { .hero { grid-template-columns:1fr; } .grid { grid-template-columns:1fr; } }
+</style>
+</head>
+<body data-lang="ar">
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <svg width="40" height="40" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C6CFF"/><stop offset="1" stop-color="#22D3EE"/></linearGradient></defs><rect x="3" y="3" width="58" height="58" rx="14" fill="url(#lg)"/><path d="M16 50 L32 14 L48 50" stroke="#fff" stroke-width="5.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><line x1="23" y1="38" x2="41" y2="38" stroke="#fff" stroke-width="4.4" stroke-linecap="round"/><circle cx="32" cy="38" r="5" fill="#0B0D12" stroke="#fff" stroke-width="2"/></svg>
+      <div>Agentsii<small>Codex Manager</small></div>
+    </div>
+    <button class="lang" id="langBtn" type="button">English</button>
+  </header>
+
+  <section class="hero">
+    <div>
+      <h1><span class="ar">اربط أي مزود ذكاء اصطناعي مع <span class="grad">OpenAI Codex</span></span><span class="en">Connect any AI provider to <span class="grad">OpenAI Codex</span></span></h1>
+      <p class="lead">
+        <span class="ar">DeepSeek وOpenRouter وVenice AI وShannon AI أو أي API متوافق مع OpenAI — بضغطة زر، بدون Terminal وبدون تعديل الملفات يدوياً. مفاتيحك تبقى على جهازك.</span>
+        <span class="en">DeepSeek, OpenRouter, Venice AI, Shannon AI or any OpenAI-compatible API — in one click, no terminal, no hand-editing config files. Your keys never leave your PC.</span>
+      </p>
+      <span class="meta"><span class="ar">Windows 10 و 11 (64-bit)</span><span class="en">Windows 10 &amp; 11 (64-bit)</span></span>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <strong><span class="ar">التحميل</span><span class="en">Download</span></strong>
+        <span id="status" class="pill wait">…</span>
+      </div>
+      <div class="dl" id="downloads"></div>
+      <p class="meta" id="pending">
+        <span class="ar">الإصدار الأول قيد التجهيز. ستظهر روابط التحميل هنا تلقائياً فور نشرها.</span>
+        <span class="en">The first release is being prepared. Download links will appear here automatically once published.</span>
+      </p>
+      <div id="sums" class="sums"></div>
+    </div>
+  </section>
+
+  <section class="grid">
+    <div class="card"><h3><span class="ar">ربط تلقائي آمن</span><span class="en">Safe automatic setup</span></h3><p><span class="ar">يكتشف Codex و config.toml، يحتفظ بإعداداتك، ويأخذ نسخة احتياطية قبل كل تعديل.</span><span class="en">Detects Codex and config.toml, keeps your settings, backs up before every change.</span></p></div>
+    <div class="card"><h3><span class="ar">مفاتيح محمية</span><span class="en">Protected keys</span></h3><p><span class="ar">تُحفظ في Windows Credential Manager فقط، ولا تُكتب في أي ملف ولا تُرسل لأي سيرفر.</span><span class="en">Stored only in Windows Credential Manager — never in files, never sent to any server.</span></p></div>
+    <div class="card"><h3><span class="ar">كل البروتوكولات</span><span class="en">Every protocol</span></h3><p><span class="ar">Responses مباشرة، و Chat Completions عبر جسر Agentsii المحلي مع دعم الأدوات والبث.</span><span class="en">Responses directly; Chat Completions through the local Agentsii Bridge with tools and streaming.</span></p></div>
+  </section>
+
+  <h2><span class="ar">ابدأ في 3 خطوات</span><span class="en">Get started in 3 steps</span></h2>
+  <ol>
+    <li class="ar"><b>ثبّت البرنامج</b> — إن ظهر تحذير SmartScreen اضغط «More info» ثم «Run anyway».</li>
+    <li class="en"><b>Install the app</b> — if SmartScreen appears, click “More info” then “Run anyway”.</li>
+    <li class="ar"><b>Add Provider</b> — اختر المزود، الصق مفتاح API، واختر الموديل.</li>
+    <li class="en"><b>Add Provider</b> — pick your provider, paste the API key, choose a model.</li>
+    <li class="ar"><b>Save &amp; Connect to Codex</b> — ثم أعد تشغيل Codex. انتهى!</li>
+    <li class="en"><b>Save &amp; Connect to Codex</b> — then restart Codex. Done!</li>
+  </ol>
+
+  <footer>
+    <span>© 2026 Agentsii</span>
+    <span><span class="ar">لا تتبع. لا تخزين سحابي. بياناتك على جهازك.</span><span class="en">No telemetry. No cloud storage. Your data stays on your PC.</span></span>
+  </footer>
+</div>
+<script>
+(function () {
+  var body = document.body, btn = document.getElementById("langBtn");
+  function setLang(l) {
+    body.setAttribute("data-lang", l);
+    document.documentElement.lang = l;
+    document.documentElement.dir = l === "ar" ? "rtl" : "ltr";
+    btn.textContent = l === "ar" ? "English" : "العربية";
+    try { localStorage.setItem("agentsii-lang", l); } catch (e) {}
+  }
+  var saved = null;
+  try { saved = localStorage.getItem("agentsii-lang"); } catch (e) {}
+  setLang(saved || ((navigator.language || "").indexOf("ar") === 0 ? "ar" : "ar"));
+  btn.onclick = function () { setLang(body.getAttribute("data-lang") === "ar" ? "en" : "ar"); };
+
+  function mb(n) { return n ? (n / 1048576).toFixed(1) + " MB" : ""; }
+  function link(cls, url, ar, en, size) {
+    var a = document.createElement("a");
+    a.className = "btn " + cls; a.href = url; a.rel = "noopener";
+    a.innerHTML = '<span><span class="ar">' + ar + '</span><span class="en">' + en + '</span></span><small>' + mb(size) + '</small>';
+    return a;
+  }
+  var status = document.getElementById("status");
+  fetch("latest.json", { cache: "no-store" }).then(function (r) {
+    if (!r.ok) throw new Error(r.status);
+    return r.json();
+  }).then(function (m) {
+    if (!m || !m.installer || !/^https:\/\//.test(m.installer.url || "")) throw new Error("no release");
+    var d = document.getElementById("downloads");
+    d.appendChild(link("primary", m.installer.url, "تحميل المثبّت (موصى به)", "Download installer (recommended)", m.installer.size));
+    if (m.portable && /^https:\/\//.test(m.portable.url || ""))
+      d.appendChild(link("", m.portable.url, "النسخة المحمولة (بدون تثبيت)", "Portable version (no install)", m.portable.size));
+    document.getElementById("pending").style.display = "none";
+    status.className = "pill ok";
+    status.textContent = "v" + m.version + (m.released ? " • " + m.released : "");
+    var s = "SHA-256\n" + m.installer.sha256 + "  Setup";
+    if (m.portable && m.portable.sha256) s += "\n" + m.portable.sha256 + "  Portable";
+    document.getElementById("sums").textContent = s;
+  }).catch(function () {
+    status.className = "pill wait";
+    status.innerHTML = '<span class="ar">قريباً</span><span class="en">Coming soon</span>';
+  });
+})();
+</script>
+</body>
+</html>
