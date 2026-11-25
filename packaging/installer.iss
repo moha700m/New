@@ -5,7 +5,7 @@
   #define MyAppVersion "1.0.0"
 #endif
 #ifndef MyAppURL
-  #define MyAppURL "https://agentsii-codex-manager.vercel.app/"
+  #define MyAppURL "https://github.com/moha700m/New/releases/latest"
 #endif
 
 [Setup]
