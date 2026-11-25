@@ -123,7 +123,7 @@ def main() -> None:
     (REL / "SHA256SUMS.txt").write_text("\n".join(sums) + "\n", encoding="utf-8")
     setup = f"AgentsiiCodexManager-Setup-{VERSION}.exe"
     manifest = {"version": VERSION, "released": time.strftime("%Y-%m-%d"),
-                "notes": {"en": "", "ar": ""},
+                "notes": json.loads((PKG / "notes.json").read_text(encoding="utf-8")),
                 "installer": {"url": f"__BASE__/{setup}", **files.get(setup, {"sha256": "", "size": 0})},
                 "portable": {"url": f"__BASE__/{portable_name}.exe", **files[f"{portable_name}.exe"]}}
     (REL / "latest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")

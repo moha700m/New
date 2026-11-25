@@ -2,6 +2,8 @@
 
 Connect OpenAI Codex to DeepSeek, OpenRouter, Venice AI, Shannon AI or any OpenAI-compatible provider — no terminal, no manual config editing. Keys stay in Windows Credential Manager.
 
+**What's new in 1.0.1:** more time allowed for the first start of the Agentsii Bridge on slower PCs.
+
 **Downloads (Windows 10/11, 64-bit)**
 - `AgentsiiCodexManager-Setup-*.exe` — installer (recommended, no admin rights needed)
 - `AgentsiiCodexManager-Portable-*.exe` — single-file portable version

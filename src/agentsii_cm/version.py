@@ -3,7 +3,7 @@
 APP_NAME = "Agentsii Codex Manager"
 APP_ID = "agentsii-codex-manager"
 PUBLISHER = "Agentsii"
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 VERSION_TUPLE = tuple(int(p) for p in VERSION.split("."))
 COPYRIGHT = "Copyright (c) 2026 Agentsii. All rights reserved."
 

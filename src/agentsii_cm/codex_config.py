@@ -158,7 +158,7 @@ class CodexConfigManager:
             auth = tomlkit.table()
             auth["command"] = tomlkit.string(str(self.helper_path), literal="'" not in str(self.helper_path))
             auth["args"] = ["bridge-token"] if bridged else ["token", p.id]
-            auth["timeout_ms"] = 30000 if bridged else 15000
+            auth["timeout_ms"] = 90000 if bridged else 30000
             # Direct keys are static: 0 = re-run the helper only after an auth retry.
             # Bridge: refresh every 5 minutes, which also restarts the bridge if it stopped.
             auth["refresh_interval_ms"] = 300000 if bridged else 0

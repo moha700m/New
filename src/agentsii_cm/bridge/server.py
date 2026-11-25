@@ -358,7 +358,7 @@ def spawn_detached(argv: list[str]) -> None:
     subprocess.Popen(argv, start_new_session=True, **kwargs)
 
 
-def ensure_running(port: int, launcher_argv: list[str], wait: float = 12.0) -> bool:
+def ensure_running(port: int, launcher_argv: list[str], wait: float = 60.0) -> bool:
     if health(port):
         return True
     spawn_detached(launcher_argv)
