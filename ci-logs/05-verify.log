@@ -1,0 +1,13 @@
+PASS gui_selftest
+PASS gui_keyring_backend_is_windows
+PASS portable_selftest
+PASS helper_reads_credential_manager
+PASS helper_missing_key_exit_2
+PASS helper_bridge_token_starts_bridge
+PASS bridge_health
+PASS bridge_stop
+Codex: codex-cli 0.172.0
+PASS connect_ci-chat
+PASS codex_exec_ci-chat
+PASS connect_ci-resp
+PASS codex_exec_ci-resp

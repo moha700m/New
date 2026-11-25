@@ -1,0 +1,18 @@
+{
+  "version": "1.0.1",
+  "released": "2026-11-25",
+  "notes": {
+    "en": "More time allowed for the first start of the Agentsii Bridge on slower PCs.",
+    "ar": "\u0645\u0646\u062d \u0648\u0642\u062a \u0623\u0637\u0648\u0644 \u0644\u062a\u0634\u063a\u064a\u0644 \u062c\u0633\u0631 Agentsii \u0644\u0623\u0648\u0644 \u0645\u0631\u0629 \u0639\u0644\u0649 \u0627\u0644\u0623\u062c\u0647\u0632\u0629 \u0627\u0644\u0623\u0628\u0637\u0623."
+  },
+  "installer": {
+    "url": "https://github.com/moha700m/New/releases/download/agentsii-codex-manager-v1.0.1/AgentsiiCodexManager-Setup-1.0.1.exe",
+    "sha256": "26a7062c9b71a9ea4d9f225cbcbc1ccefd7999befc66883ea5af77c433bb8514",
+    "size": 58066572
+  },
+  "portable": {
+    "url": "https://github.com/moha700m/New/releases/download/agentsii-codex-manager-v1.0.1/AgentsiiCodexManager-Portable-1.0.1.exe",
+    "sha256": "174c33055c8de097f559653b1ec287ab110e8ef478797f6d6a26cc361014cd11",
+    "size": 72264052
+  }
+}

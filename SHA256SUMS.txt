@@ -1,0 +1,2 @@
+174c33055c8de097f559653b1ec287ab110e8ef478797f6d6a26cc361014cd11  AgentsiiCodexManager-Portable-1.0.1.exe
+26a7062c9b71a9ea4d9f225cbcbc1ccefd7999befc66883ea5af77c433bb8514  AgentsiiCodexManager-Setup-1.0.1.exe

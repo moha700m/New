@@ -1,0 +1,68 @@
+{
+  "version": "1.0.1",
+  "checks": [
+    {
+      "name": "gui_selftest",
+      "ok": true,
+      "detail": "{\"ok\": true, \"pages\": 8, \"keyring\": \"keyring.backends.Windows.WinVaultKeyring\", \"helper_bundled\": true}"
+    },
+    {
+      "name": "gui_keyring_backend_is_windows",
+      "ok": true,
+      "detail": "keyring.backends.Windows.WinVaultKeyring"
+    },
+    {
+      "name": "portable_selftest",
+      "ok": true,
+      "detail": "{\"ok\": true, \"pages\": 8, \"keyring\": \"keyring.backends.Windows.WinVaultKeyring\", \"helper_bundled\": true}"
+    },
+    {
+      "name": "helper_reads_credential_manager",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "helper_missing_key_exit_2",
+      "ok": true,
+      "detail": "agentsii-helper: no API key saved for provider 'does-not-exist'. Open Agentsii Codex Manager and add it.\n"
+    },
+    {
+      "name": "helper_bridge_token_starts_bridge",
+      "ok": true,
+      "detail": "[PYI-1564:WARNING] Failed to remove temporary directory: C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\_MEI0000061c2\n (20.6s)"
+    },
+    {
+      "name": "bridge_health",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "bridge_stop",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "connect_ci-chat",
+      "ok": true,
+      "detail": " | config.toml is valid TOML.; Provider entry matches.; Codex default points to this provider and model.; Codex can retrieve the credential through the helper.; Agentsii Bridge is running on 127.0.0.1:59942."
+    },
+    {
+      "name": "codex_exec_ci-chat",
+      "ok": true,
+      "detail": "Codex answered through this provider.\nupstream paths: ['/v1/chat/completions']"
+    },
+    {
+      "name": "connect_ci-resp",
+      "ok": true,
+      "detail": " | config.toml is valid TOML.; Provider entry matches.; Codex can retrieve the credential through the helper."
+    },
+    {
+      "name": "codex_exec_ci-resp",
+      "ok": true,
+      "detail": "Codex answered through this provider.\nupstream paths: ['/v1/responses']"
+    }
+  ],
+  "codex_version": "codex-cli 0.172.0",
+  "config_toml": "model_provider = \"ci-chat\"\nmodel = \"mock-chat\"\n\n[model_providers.ci-chat]\nname = \"CI Chat (via Agentsii Bridge)\"\nbase_url = \"http://127.0.0.1:59942/p/ci-chat/v1\"\nwire_api = \"responses\"\n\n[model_providers.ci-chat.auth]\ncommand = 'C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\agentsii-ci-zux1z27u\\home\\local\\bin\\agentsii-helper.exe'\nargs = [\"bridge-token\"]\ntimeout_ms = 90000\nrefresh_interval_ms = 300000\n\n[model_providers.ci-resp]\nname = \"CI Responses\"\nbase_url = \"http://127.0.0.1:59962/v1\"\nwire_api = \"responses\"\n\n[model_providers.ci-resp.auth]\ncommand = 'C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\agentsii-ci-zux1z27u\\home\\local\\bin\\agentsii-helper.exe'\nargs = [\"token\", \"ci-resp\"]\ntimeout_ms = 30000\nrefresh_interval_ms = 0\n",
+  "ok": true
+}
