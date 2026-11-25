@@ -103,3 +103,9 @@ tests/                       64 اختباراً (pytest) تشمل مزوداً 
 - `AgentsiiCodexManager-Setup-1.0.0.exe` — مثبّت (بدون صلاحيات مدير)
 - `AgentsiiCodexManager-Portable-1.0.0.exe` — نسخة محمولة بملف واحد
 - `SHA256SUMS.txt` و `latest.json`
+
+## روابط التوزيع
+
+- صفحة التحميل: https://agentsii-codex-manager.vercel.app/
+- أحدث إصدار على GitHub: https://github.com/moha700m/New/releases/latest
+- ملف التحديث الذي يقرأه البرنامج: https://github.com/moha700m/New/releases/latest/download/latest.json
