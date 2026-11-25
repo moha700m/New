@@ -35,19 +35,19 @@ def mgr(codex_home, tmp_path):
     s = AppSettings()
     helper = tmp_path / "bin dir" / "agentsii-helper.exe"
     helper.parent.mkdir()
-    helper.write_text("x")
+    helper.write_text("x", encoding="utf-8")
     return CodexConfigManager(codex_home, s, helper, tmp_path / "backups", save_settings=lambda _s: None)
 
 
 def load(m):
-    return tomllib.loads(m.config_path.read_text())
+    return tomllib.loads(m.config_path.read_text(encoding="utf-8"))
 
 
 def test_apply_direct_preserves_everything(mgr):
     p = provider(id="openrouter", name="OpenRouter", base_url="https://openrouter.ai/api/v1",
                  wire_api=WIRE_RESPONSES, models=["openai/gpt-5"], default_model="openai/gpt-5")
     res = mgr.apply_provider(p, make_default=True)
-    text = mgr.config_path.read_text()
+    text = mgr.config_path.read_text(encoding="utf-8")
     assert "# My personal Codex config — keep this comment!" in text
     data = load(mgr)
     assert data["approval_policy"] == "on-request"
@@ -60,7 +60,7 @@ def test_apply_direct_preserves_everything(mgr):
     assert t["auth"]["command"] == str(mgr.helper_path)
     assert "env_key" not in t and "experimental_bearer_token" not in t
     assert data["model_provider"] == "openrouter" and data["model"] == "openai/gpt-5"
-    assert res.backup_path and Path(res.backup_path).read_text() == ORIGINAL
+    assert res.backup_path and Path(res.backup_path).read_text(encoding="utf-8") == ORIGINAL
     assert mgr.settings.original_codex_defaults == {"model": "gpt-5.5", "model_provider": None}
     assert mgr.profile_path("openrouter").is_file()
 
@@ -76,7 +76,7 @@ def test_chat_provider_goes_through_bridge(mgr):
 
 def test_no_key_anywhere(mgr, mem_keyring):
     mgr.apply_provider(provider(), make_default=True)
-    assert "sk-" not in mgr.config_path.read_text()
+    assert "sk-" not in mgr.config_path.read_text(encoding="utf-8")
 
 
 def test_no_auth_provider(mgr):
@@ -93,10 +93,10 @@ def test_conflict_with_user_table(mgr):
 
 
 def test_invalid_toml_is_never_touched(mgr):
-    mgr.config_path.write_text("model = [broken\n")
+    mgr.config_path.write_text("model = [broken\n", encoding="utf-8")
     with pytest.raises(ConfigParseError):
         mgr.apply_provider(provider(), make_default=True)
-    assert mgr.config_path.read_text() == "model = [broken\n"
+    assert mgr.config_path.read_text(encoding="utf-8") == "model = [broken\n"
 
 
 def test_missing_config_is_created(codex_home, tmp_path):
@@ -117,7 +117,7 @@ def test_disconnect_restores_original_defaults(mgr):
     data = load(mgr)
     assert set(data["model_providers"]) == {"mine"}
     assert not mgr.profile_path("deepseek").exists()
-    assert "keep this comment" in mgr.config_path.read_text()
+    assert "keep this comment" in mgr.config_path.read_text(encoding="utf-8")
 
 
 def test_remove_refuses_foreign_table(mgr):
@@ -139,7 +139,7 @@ def test_backups_and_restore(mgr):
     backups = mgr.list_backups()
     assert backups
     mgr.restore_backup(backups[-1])
-    assert mgr.config_path.read_text() == ORIGINAL
+    assert mgr.config_path.read_text(encoding="utf-8") == ORIGINAL
 
 
 def test_validate_provider(mgr):

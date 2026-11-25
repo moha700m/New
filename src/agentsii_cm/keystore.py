@@ -23,11 +23,16 @@ class SecretStoreError(RuntimeError):
 
 def _configure_backend() -> None:
     if sys.platform == "win32":
-        # PyInstaller builds may not expose entry points; pin the Windows backend explicitly.
+        # PyInstaller builds may not discover backends through entry points, leaving the
+        # "fail" or an empty chainer backend: pin Windows Credential Manager in that case.
         from keyring.backends.Windows import WinVaultKeyring
 
-        if not isinstance(keyring.get_keyring(), WinVaultKeyring):
-            keyring.set_keyring(WinVaultKeyring())
+        current = keyring.get_keyring()
+        name = type(current).__module__ + "." + type(current).__name__
+        empty_chainer = "Chainer" in name and not getattr(current, "backends", None)
+        if getattr(sys, "frozen", False) or "fail" in name or empty_chainer:
+            if not isinstance(current, WinVaultKeyring):
+                keyring.set_keyring(WinVaultKeyring())
 
 
 class SecretStore:

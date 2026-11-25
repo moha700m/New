@@ -20,7 +20,7 @@ def test_ui_selftest(tmp_path):
     out = tmp_path / "st.json"
     r = subprocess.run([sys.executable, "-m", "agentsii_cm.app", "--selftest", "--selftest-out", str(out)],
                        env=env, capture_output=True, text=True, timeout=120)
-    data = json.loads(out.read_text())
+    data = json.loads(out.read_text(encoding="utf-8"))
     assert r.returncode == 0 and data["ok"], data.get("error")
     assert data["pages"] == 8
 
@@ -61,7 +61,7 @@ def test_end_to_end_chat_provider_through_spawned_bridge(codex_home, file_keyrin
     try:
         res = core.connect("dsk")
         assert res.ok, res.error
-        cfg = tomllib.loads((codex_home / "config.toml").read_text())
+        cfg = tomllib.loads((codex_home / "config.toml").read_text(encoding="utf-8"))
         table = cfg["model_providers"]["dsk"]
         # Do exactly what Codex does: run the auth command, then call base_url/responses with the token.
         r = subprocess.run([table["auth"]["command"], *table["auth"]["args"]], capture_output=True, text=True,

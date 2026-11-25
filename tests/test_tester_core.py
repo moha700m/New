@@ -108,13 +108,13 @@ def file_keyring(tmp_path, monkeypatch):
 def test_core_connect_flow_with_real_helper(upstream, codex_home, file_keyring):
     _, base = upstream
     core = AppCore()
-    (codex_home / "config.toml").write_text('model = "gpt-5.5"\n[features]\nx = true\n')
+    (codex_home / "config.toml").write_text('model = "gpt-5.5"\n[features]\nx = true\n', encoding="utf-8")
     p = Provider(id="mockdirect", name="Mock Direct", base_url=base, wire_api=WIRE_RESPONSES,
                  models=["mock-chat"], default_model="mock-chat", is_default=True)
     core.save_provider(p, API_KEY)
     res = core.connect("mockdirect")
     assert res.ok, res.error
-    data = tomllib.loads((codex_home / "config.toml").read_text())
+    data = tomllib.loads((codex_home / "config.toml").read_text(encoding="utf-8"))
     assert data["features"]["x"] is True
     assert data["model_provider"] == "mockdirect"
     helper = data["model_providers"]["mockdirect"]["auth"]["command"]
@@ -126,14 +126,14 @@ def test_core_connect_flow_with_real_helper(upstream, codex_home, file_keyring):
     with contextlib.redirect_stdout(buf):
         assert helper_cli.main(["token", "mockdirect"]) == 0
     assert buf.getvalue().strip() == API_KEY
-    assert API_KEY not in (codex_home / "config.toml").read_text()
+    assert API_KEY not in (codex_home / "config.toml").read_text(encoding="utf-8")
     assert core.store.get("mockdirect").codex_connected
     # switching model
     core.set_default("mockdirect", "mock-reasoner")
-    assert tomllib.loads((codex_home / "config.toml").read_text())["model"] == "mock-reasoner"
+    assert tomllib.loads((codex_home / "config.toml").read_text(encoding="utf-8"))["model"] == "mock-reasoner"
     # disconnect restores
     core.disconnect("mockdirect")
-    data = tomllib.loads((codex_home / "config.toml").read_text())
+    data = tomllib.loads((codex_home / "config.toml").read_text(encoding="utf-8"))
     assert data["model"] == "gpt-5.5" and "model_providers" not in data
     core.delete_provider("mockdirect")
     assert file_keyring.get_password("Agentsii Codex Manager", "provider:mockdirect") is None
@@ -208,11 +208,11 @@ def test_check_manifest_over_http():
 
 def test_backup_roundtrip(tmp_path):
     pf = tmp_path / "providers.json"
-    pf.write_text(json.dumps({"providers": []}))
+    pf.write_text(json.dumps({"providers": []}), encoding="utf-8")
     sf = tmp_path / "settings.json"
-    sf.write_text("{}")
+    sf.write_text("{}", encoding="utf-8")
     cf = tmp_path / "config.toml"
-    cf.write_text('model = "x"\n')
+    cf.write_text('model = "x"\n', encoding="utf-8")
     z = backup.create_backup(tmp_path / "b.zip", pf, sf, cf)
     data = backup.read_backup(z)
     assert set(data) == {"providers.json", "settings.json", "codex/config.toml"}
