@@ -1,0 +1,5 @@
+PySide6-Essentials>=6.8,<6.13
+tomlkit>=0.13,<0.15
+keyring>=25,<26
+httpx>=0.27,<0.29
+truststore>=0.10

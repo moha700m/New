@@ -1,0 +1,106 @@
+name: Build Windows release
+
+on:
+  push:
+    branches: [agentsii-codex-manager]
+    paths-ignore: ["**.md", "docs/**", "site/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-windows
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: |
+          mkdir -p ci-logs
+          set -o pipefail
+          python -m pip install --upgrade pip 2>&1 | tee -a ci-logs/01-install.log
+          pip install -r requirements-dev.txt 2>&1 | tee -a ci-logs/01-install.log
+
+      - name: Unit + integration tests (Windows)
+        run: |
+          set -o pipefail
+          python -m pytest -q 2>&1 | tee ci-logs/02-tests.log
+
+      - name: Install Inno Setup and Codex CLI
+        run: |
+          set -o pipefail
+          (choco install innosetup -y --no-progress || true) 2>&1 | tee ci-logs/03-tools.log
+          npm install -g @openai/codex 2>&1 | tee -a ci-logs/03-tools.log
+          (codex --version || true) 2>&1 | tee -a ci-logs/03-tools.log
+
+      - name: Build EXEs and installer
+        run: |
+          set -o pipefail
+          echo "APP_VERSION=$(PYTHONPATH=src python -c 'from agentsii_cm.version import VERSION; print(VERSION)')" >> "$GITHUB_ENV"
+          python packaging/build.py 2>&1 | tee ci-logs/04-build.log
+          ls -la dist dist/release 2>&1 | tee -a ci-logs/04-build.log
+
+      - name: Verify built app on Windows (Credential Manager, bridge, real Codex CLI)
+        run: |
+          set -o pipefail
+          python packaging/ci_verify.py 2>&1 | tee ci-logs/05-verify.log
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentsii-codex-manager-windows
+          path: |
+            dist/release/
+            ci-logs/
+          if-no-files-found: warn
+
+      - name: Publish build output to branch agentsii-builds
+        if: always()
+        run: |
+          set -x
+          SHA=$(git rev-parse --short HEAD)
+          STATUS="${{ job.status }}"
+          mkdir -p /tmp/out
+          cp -r ci-logs /tmp/out/ || true
+          if [ -d dist/release ]; then cp -r dist/release/* /tmp/out/ || true; fi
+          # keep each file below GitHub's 100 MB limit
+          find /tmp/out -type f -size +95M -print -delete || true
+          echo "{\"commit\": \"$SHA\", \"run_id\": \"${{ github.run_id }}\", \"date\": \"$(date -u +%FT%TZ)\"}" > /tmp/out/build-info.json
+          cd /tmp/out
+          git init -q -b agentsii-builds
+          git config user.name "agentsii-ci"
+          git config user.email "ci@agentsii.local"
+          git add -A
+          git commit -qm "Build $SHA (${{ github.run_id }})"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" agentsii-builds
+
+      - name: Create GitHub release (private repo record)
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: agentsii-codex-manager-v${{ env.APP_VERSION || '1.0.0' }}
+          name: Agentsii Codex Manager ${{ env.APP_VERSION || '1.0.0' }}
+          files: |
+            dist/release/*.exe
+            dist/release/SHA256SUMS.txt
+            dist/release/latest.json
+          fail_on_unmatched_files: false
